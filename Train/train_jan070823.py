@@ -5,7 +5,7 @@ from wandb_callback import wandbCallback
 USE_WANDB = True
 
 if USE_WANDB:
-    wandb.init(project="hgcalml-1", tags=["debug", "small_dataset"], name=args.run_name)
+    wandb.init(project="hgcalml_work_branch", tags=["debug", "small_dataset"], name="train_jan070823")
     wandb.run.log_code(".")
 
 
@@ -65,9 +65,6 @@ LOSS_OPTIONS = {
 n_cluster_space_coordinates = 3
 n_gravnet_dims = 3
 
-
-import tensorflow as tf
-
 import globals
 
 if True:  # for testing
@@ -75,30 +72,10 @@ if True:  # for testing
     globals.knn_ops_use_tf_gradients = True
 
 import tensorflow as tf
-from tensorflow.keras.layers import Dense, Concatenate, GaussianDropout, Dropout
 
-import training_base_hgcal
-from DeepJetCore.training.DeepJet_callbacks import simpleMetricsCallback
-from DeepJetCore.DJCLayers import StopGradient
-from datastructures import TrainData_PreselectionNanoML
-
-from Layers import RaggedGravNet, RaggedGlobalExchange
-from Layers import DistanceWeightedMessagePassing
-from Layers import DictModel, SphereActivation, Multi
-from Layers import CastRowSplits, PlotCoordinates
 from Layers import LLFullObjectCondensation as LLExtendedObjectCondensation
-from Layers import ScaledGooeyBatchNorm2, Sqrt
 from Layers import LLFillSpace, SphereActivation
-from Regularizers import AverageDistanceRegularizer
-from model_blocks import create_outputs
-from model_blocks import extent_coords_if_needed
-from model_blocks import tiny_pc_pool, condition_input
-from model_tools import apply_weights_from_path
-from callbacks import plotEventDuringTraining, plotClusteringDuringTraining
-from callbacks import plotClusterSummary, NanSweeper
-from Layers import layernorm, EdgeConvStatic
-import os
-from argparse import ArgumentParser
+
 from tensorflow.keras.layers import Dense, Concatenate, Add, Reshape, Flatten
 
 from DeepJetCore.DJCLayers import StopGradient
@@ -127,18 +104,6 @@ from callbacks import plotClusterSummary, plotEventDuringTraining
 from argparse import ArgumentParser
 from DeepJetCore.training.DeepJet_callbacks import simpleMetricsCallback
 
-import wandb
-
-
-parser = ArgumentParser('Run the training')
-#parser.add_argument("input_dataset")
-#parser.add_argument("output_dir")
-parser.add_argument("--interactive", help="prints output to screen", default=False, action="store_true")
-parser.add_argument("--run_name", "-name", help="wandb run name", default="")
-parser.add_argument("--epochs", "-e", help="wandb run name", default=500, type=int)
-parser.add_argument("--nbatch", "-b", help="batch size", default=10000, type=int)
-#parser.add_argument('inputDataCollection')
-#parser.add_argument('outputDir')
 
 
 def gravnet_model(
@@ -387,17 +352,7 @@ def gravnet_model(
 
 import training_base_hgcal
 
-train = training_base_hgcal.HGCalTraining(parser=parser)
-
-# args = train.args
-# learningrate = args.lr
-# print("LR=", learningrate)
-
-# if args.run_name != "":
-#    wandb.init(project="hgcalml-1", tags=["debug", "small_dataset"], name=args.run_name)
-#    wandb.run.log_code(".")
-#    wandb.config["args"] = vars(args)
-# nbatch = args.nbatch
+train = training_base_hgcal.HGCalTraining()
 
 
 PUBLISHPATH = None
@@ -432,32 +387,6 @@ import os
 
 # establish callbacks
 
-"""
-simpleMetricsCallback(
-    output_file=train.outputDir+'/metrics.html',
-    record_frequency= record_frequency,
-    plot_frequency = plotfrequency,
-    select_metrics='FullOCLoss_*loss',
-    publish=publishpath #no additional directory here (scp cannot create one)
-    ),
-
-simpleMetricsCallback(
-    output_file=train.outputDir+'/latent_space_metrics.html',
-    record_frequency= record_frequency,
-    plot_frequency = plotfrequency,
-    select_metrics='average_distance_*',
-    publish=publishpath
-    ),
-
-
-simpleMetricsCallback(
-    output_file=train.outputDir+'/val_metrics.html',
-    call_on_epoch=True,
-    select_metrics='val_*',
-    publish=publishpath #no additional directory here (scp cannot create one)
-    ),
-"""
-
 num_events_to_plot = 10
 
 
@@ -491,19 +420,13 @@ if USE_WANDB:
 
 train.change_learning_rate(LEARNINGRATE)
 
-model, history = train.trainModel(nepochs=10, batchsize=NBATCH, additional_callbacks=cb)
+model, history = train.trainModel(nepochs=1000, batchsize=NBATCH, additional_callbacks=cb)
 
 
 print("freeze BN")
-
-
 train.change_learning_rate(LEARNINGRATE / 5.0)
 
 model, history = train.trainModel(
     nepochs=100, batchsize=NBATCH, additional_callbacks=cb
 )
-
-
-
-
 
