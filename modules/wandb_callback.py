@@ -1,7 +1,12 @@
 
 from tensorflow.keras.callbacks import Callback, EarlyStopping,History,ModelCheckpoint #, ReduceLROnPlateau # , TensorBoard
+
+# loss per epoch
+from time import time
+from pdb import set_trace
+from keras import backend as K
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Agg') 
 import wandb
 
 
@@ -26,5 +31,8 @@ class wandbCallback(Callback):
         self.curr_epoch += 1
         self._record_data(logs,record_epoch=True)
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> da15da5 (add wandb callback)
