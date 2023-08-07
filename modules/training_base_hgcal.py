@@ -14,11 +14,11 @@ class HGCalTraining(training_base):
         #no reason for a lot of validation samples usually
         super().__init__(*args, resumeSilently=True,parser=parser,splittrainandtest=0.95,**kwargs)
         
-        if not self.args.interactive:
-            print('>>> redirecting the following stdout and stderr to logs in',self.outputDir)
-            import sys
-            sys.stdout = open(self.outputDir+'/stdout.txt', 'w')
-            sys.stderr = open(self.outputDir+'/stderr.txt', 'w')
+        #if not self.args.interactive:
+        #    print('>>> redirecting the following stdout and stderr to logs in',self.outputDir)
+        ##    import sys
+        #    sys.stdout = open(self.outputDir+'/stdout.txt', 'w')
+        #    sys.stderr = open(self.outputDir+'/stderr.txt', 'w')
             
         
         from config_saver import copyModules
