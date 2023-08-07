@@ -184,6 +184,8 @@ class NormaliseTruthIdxs(tf.keras.layers.Layer):
         return normalise_index(t_idx, rs, self.add_rs_offset)
 
 
+
+
 class LossLayerBase(LayerWithMetrics):
     """Base class for HGCalML loss layers.
 
@@ -330,6 +332,7 @@ class LLDummy(LossLayerBase):
         return tf.reduce_mean(inputs)
 
 
+
 class LLRegulariseGravNetSpace(LossLayerBase):
     '''
     Regularisation layer (not truth dependent)
@@ -346,9 +349,13 @@ class LLRegulariseGravNetSpace(LossLayerBase):
 
 
     def __init__(self, **kwargs):
+<<<<<<< HEAD
         if "project" in kwargs:
             self.project = kwargs["project"]
             del kwargs["project"]
+=======
+
+>>>>>>> 6ba8042 (fix the missing loss layers)
         super(LLRegulariseGravNetSpace, self).__init__(**kwargs)
         print('INFO: LLRegulariseGravNetSpace: this is actually a regulariser: move to right file soon.')
 

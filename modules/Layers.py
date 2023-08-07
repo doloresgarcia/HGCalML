@@ -4,6 +4,11 @@ On the longer term, let's keep this just a wrapper module for layers,
 but the layers themselves to other files
 """
 
+from tensorflow.keras.layers import Layer
+import tensorflow.keras.backend as K
+import tensorflow as tf
+
+
 # Define custom layers here and add them to the global_layers_list dict (important!)
 global_layers_list = {}
 
@@ -390,6 +395,14 @@ global_layers_list["PlotGraphCondensationEfficiency"] = PlotGraphCondensationEff
 
 
 # ragged layers module
+
+
+from LossLayers import LLRegulariseGravNetSpace
+global_layers_list['LLRegulariseGravNetSpace'] = LLRegulariseGravNetSpace
+
+
+#ragged layers module
+>>>>>>> 6ba8042 (fix the missing loss layers)
 from RaggedLayers import ragged_layers
 
 global_layers_list.update(ragged_layers)
@@ -494,6 +507,38 @@ from Initializers import EyeInitializer
 global_layers_list["EyeInitializer"] = EyeInitializer
 
 ####### some implementations
+def layernorm(x, return_norm=False):
+    x = x - tf.reduce_mean(x,axis=-1, keepdims=True)
+    norm = tf.reduce_sum(x**2, axis=-1,keepdims=True)
+    norm = tf.sqrt(norm+1e-6)
+    if return_norm:
+        x = tf.concat([x / norm * tf.sqrt(tf.cast(x.shape[-1],'float32')), norm], axis=-1)
+    else:
+        x = x / norm * tf.sqrt(tf.cast(x.shape[-1],'float32'))
+    return x
+
+global_layers_list['layernorm']= layernorm #convenience
+
+class SphereActivation(tf.keras.layers.Layer):
+    '''
+    a layer norm that can also return the norm
+    '''
+
+    def __init__(self, return_norm=False, **kwargs):
+        super(SphereActivation, self).__init__(**kwargs)
+        self.return_norm = return_norm
+
+    def get_config(self):
+        config = {'return_norm': self.return_norm}
+        base_config = super(SphereActivation, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+    def call(self, x):
+        if not self.return_norm:
+            return layernorm(x, False)
+        else:
+            out = layernorm(x, True)
+            return out[..., :x.shape[-1]], out[..., x.shape[-1]:x.shape[-1] + 1]
 
 
 from tensorflow.keras.layers import Layer
@@ -508,6 +553,20 @@ class GroupSortActivation(tf.keras.layers.Layer):
     def call(self, inputs):
         out = tf.sort(inputs, axis=-1)
         return tf.reshape(out, tf.shape(inputs))
+
+global_layers_list['SphereActivation'] = SphereActivation
+
+
+class Multi(tf.keras.layers.Layer):
+
+    def call(self, inputs):
+        assert len(inputs) == 2
+        x, y = inputs
+        return x * y  # but with broadcasting
+
+
+global_layers_list['Multi'] = Multi
+
 
 
 global_layers_list["GroupSortActivation"] = GroupSortActivation
