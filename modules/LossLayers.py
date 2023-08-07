@@ -346,7 +346,9 @@ class LLRegulariseGravNetSpace(LossLayerBase):
 
 
     def __init__(self, **kwargs):
-
+        if "project" in kwargs:
+            self.project = kwargs["project"]
+            del kwargs["project"]
         super(LLRegulariseGravNetSpace, self).__init__(**kwargs)
         print('INFO: LLRegulariseGravNetSpace: this is actually a regulariser: move to right file soon.')
 

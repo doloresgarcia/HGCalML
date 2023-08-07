@@ -219,7 +219,8 @@ from GravNetLayersRagged import XYZtoXYZPrime, CondensatesToPseudoRS, ReversePse
 from LossLayers import LLGoodNeighbourHood, LLOCThresholds, LLKnnPushPullObjectCondensation, LLKnnSimpleObjectCondensation
 from LossLayers import NormaliseTruthIdxs
 #also move this to the standard pre-selection  model
-def condition_input(orig_inputs, no_scaling=False):
+def condition_input(orig_inputs, no_scaling=False, no_prime=None):
+    #no_prime is not used here
 
     if not 't_spectator_weight' in orig_inputs.keys(): #compat layer
         orig_t_spectator_weight = CreateTruthSpectatorWeights(threshold=5.,minimum=1e-1,active=True
