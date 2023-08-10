@@ -46,8 +46,13 @@ LOSS_OPTIONS = {
     'beta_loss_scale':1., #2.0
     'implementation': 'hinge_full_grad' #'hinge_manhatten'#'hinge'#old school
     }
-#import wandb
+import wandb
 
+USE_WANDB = True
+
+if USE_WANDB:
+    wandb.init(project="hgcalml_work_branch", tags=["debug", "small_dataset"], name="train_jan070823")
+    wandb.run.log_code(".")
 
 # 3 is a bit low but nice in the beginning since it can be plotted
 n_cluster_space_coordinates = 3
@@ -94,7 +99,7 @@ from Layers import RaggedGlobalExchange, DistanceWeightedMessagePassing, DictMod
 from Layers import RaggedGravNet, ScaledGooeyBatchNorm2
 from Regularizers import AverageDistanceRegularizer
 from LossLayers import LLFullObjectCondensation, LLFillSpace
-#from wandb_callback import wandbCallback
+from wandb_callback import wandbCallback
 from DebugLayers import PlotCoordinates
 
 from model_blocks import condition_input, extent_coords_if_needed, create_outputs, re_integrate_to_full_hits
@@ -304,9 +309,9 @@ def gravnet_model(Inputs, td, debug_outdir=None, publishpath=None, plot_debug_ev
     #fast feedback
     pred_ccoords = PlotCoordinates(
         plot_every=plot_debug_every,
-        outdir = debug_outdir,
+        outdir=debug_outdir,
         name='condensation',
-            publish = publishpath
+        publish=publishpath
         )([pred_ccoords, pred_beta,pre_selection['t_idx'], rs])
     model_outputs = {
             'pred_beta': pred_beta,
@@ -341,9 +346,10 @@ train = training_base_hgcal.HGCalTraining()
 #    wandb.config["args"] = vars(args)
 #nbatch = args.nbatch
 
-PUBLISHPATH = "jkiesele@lxplus.cern.ch:~/Cernbox/www/files/temp/Aug23/"
+PUBLISHPATH = "gkrzmanc@lxplus.cern.ch:/eos/home-g/gkrzmanc/results_aug23/"
+PUBLISHPATH=None
 if PUBLISHPATH is not None:
-    PUBLISHPATH += [d  for d in train.outputDir.split('/') if len(d)][-1]
+    PUBLISHPATH += [d for d in train.outputDir.split('/') if len(d)][-1]
     
 publishpath = PUBLISHPATH #this can be an ssh reachable path (be careful: needs tokens / keypairs)
 
@@ -415,6 +421,8 @@ cb = [
     
 ]
 
+if USE_WANDB:
+    cb += [wandbCallback()]
 
 #if args.run_name:
 #    cb += [wandbCallback()]
