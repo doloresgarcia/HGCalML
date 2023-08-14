@@ -16,9 +16,9 @@ BATCHNORM_OPTIONS = {
 
 
 # Configuration for training
-DENSE_ACTIVATION='elu' #layernorm #'elu'
-LEARNINGRATE = 1e-4 
-NBATCH = 120000#200000
+DENSE_ACTIVATION='elu'  # layernorm #'elu'
+LEARNINGRATE = 1e-4
+NBATCH = 120000  #200000
 DENSE_REGULARIZER = None
 
 # Configuration of GravNet Blocks
@@ -51,7 +51,7 @@ import wandb
 USE_WANDB = True
 
 if USE_WANDB:
-    wandb.init(project="hgcalml_work_branch", tags=["debug", "small_dataset"], name="train_jan070823")
+    wandb.init(project="hgcalml_work_branch", tags=["debug", "small_dataset"], name="train_1008_logging_pictures")
     wandb.run.log_code(".")
 
 # 3 is a bit low but nice in the beginning since it can be plotted
@@ -144,14 +144,14 @@ def gravnet_model(Inputs, td, debug_outdir=None, publishpath=None, plot_debug_ev
     x_in = Dense(64, activation=DENSE_ACTIVATION)(x_in)
     x = x_in
     energy = pre_selection['rechit_energy']
-    c_coords = pre_selection['prime_coords']#pre-clustered coordinates
+    c_coords = pre_selection['prime_coords']  # pre-clustered coordinates
     c_coords = ScaledGooeyBatchNorm2(
         fluidity_decay=0.5, #can freeze almost immediately
         )(c_coords)
     t_idx = pre_selection['t_idx']
 
     c_coords = PlotCoordinates(
-            plot_every=plot_debug_every,
+            plot_every=10,
             outdir=debug_outdir,
             name='input_c_coords',
             publish = publishpath
@@ -312,7 +312,7 @@ def gravnet_model(Inputs, td, debug_outdir=None, publishpath=None, plot_debug_ev
         outdir=debug_outdir,
         name='condensation',
         publish=publishpath
-        )([pred_ccoords, pred_beta,pre_selection['t_idx'], rs])
+        )([pred_ccoords, pred_beta, pre_selection['t_idx'], rs])
     model_outputs = {
             'pred_beta': pred_beta,
             'pred_ccoords': pred_ccoords,
@@ -421,21 +421,33 @@ cb = [
     
 ]
 
-if USE_WANDB:
-    cb += [wandbCallback()]
 
 #if args.run_name:
 #    cb += [wandbCallback()]
 #
 
-#cb=[]
-'''plotEventDuringTraining(
-        outputfile=train.outputDir + "/cluster_coords/",
-        samplefile=train.val_data.getSamplePath(train.val_data.samples[0]),
-        after_n_batches=200,
+num_events_to_plot = 10
+if USE_WANDB:
+    cb += [wandbCallback()]
+
+plot_idx = []
+for i in range(num_events_to_plot):
+    plot_idx += [len(cb)]
+    cb += [plotEventDuringTraining(
+        outputfile=train.outputDir + "/cluster_coords/{}/".format(i),
+        samplefile=train.train_data.getSamplePath(train.train_data.samples[0]),
         on_epoch_end=True,
-        )
-]'''
+        use_event=i,
+    )]
+
+
+
+# FOR DEBUGGING
+for i in plot_idx:
+    cb[i].model = train.keras_model
+    print("Calling callback", i, " (before training the model further)")
+    cb[i].predict_and_call(1)
+
 
 # FOR DEBUGGING
 #for i in range(len(cb) - 1):
