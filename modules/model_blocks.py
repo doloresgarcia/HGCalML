@@ -15,9 +15,97 @@ from Initializers import EyeInitializer
 from GravNetLayersRagged import CondensateToIdxs, EdgeCreator, Where, SplitOffTracks
 from GravNetLayersRagged import RaggedGravNet
 from Layers import SplitFeatures, FlatNeighbourFeatures, Sqrt
+import tensorflow as tf
+from tensorflow.keras.layers import Dropout, Dense, Concatenate, BatchNormalization, Add, Multiply, LeakyReLU
+from tensorflow.keras.layers import Lambda
 
+from DeepJetCore.DJCLayers import  SelectFeatures, ScalarMultiply, StopGradient
+
+from Layers import OnesLike, ZerosLike
+from LossLayers import LLRegulariseGravNetSpace
+from Initializers import EyeInitiklizer
+from GravNetLayersRagged import CondensateToIdxs, EdgeCreator, RandomSampling, MultiBackScatter
+from Layers import SplitFeatures, FlatNeighbourFeatures, Sqrt
 from datastructures.TrainData_NanoML import n_id_classes
+<<<<<<< HEAD
 from oc_helper_ops import SelectWithDefault
+=======
+from binned_select_knn_op import BinnedSelectKnn
+
+
+def random_sampling_unit(x, rs, is_track, physical_coords, reductions, config=None):
+    """
+    Unit that reduces the number of hits by random sampling in potentially multiple steps
+    and backgatheres the information afterwards to the original shape
+    """
+
+    default_config = {
+        'n_gravnet_dimensions': 3,
+        'n_gravnet_neighbours': 256,
+        'regularise_gravnet': 0.1,
+        'message_passing': [[64, 32, 16], [32, 16, 16], [32, 32, 32]],
+        'concat': True
+    }
+    if config is None:
+        config = default_config
+
+    xgn, gncoords, gnnidx, gndist = RaggedGravNet(
+        name = f"RSU_gravnet",
+        n_neighbours=config['n_gravnet_neighbours'],
+        n_dimensions=config['n_gravnet_dimensions'],
+        n_filters=64,
+        n_propagate=64,
+        record_metrics=True,
+        coord_initialiser_noise=1e-2,
+        use_approximate_knn=False,
+        feature_activation='elu',
+        )([x, rs])
+    gndist = LLRegulariseGravNetSpace(config['regularise_gravnet'])([gndist, physical_coords, gnnidx])
+    x_top_level = Concatenate()(x, xgn, gncoords)
+
+    # Top level message passing
+    for i, message in enumerate(config['message_passing'][0]):
+        x_top_level = DistanceWeightedMessagePassing(
+            name=f"RSU_message_passing_toplevel_iteration_{i}",
+            n_feature_transformation = message,
+            activation='elu',
+        )([x, gnnidx, gndist])
+        x_top_level = SphereActivation()(x_top_level)
+
+    # First reduction
+    x_reduced_1, rs_reduced_1, (size_0, indices_selected_0) = RandomSampling(reductions[0])([x_top_level, is_track, rs])
+    gravnetcoords_reduced_1 = SelectFromIndices()([indices_selected_0, gncoords])
+
+    gnnidx_reduced_1, gndist_reduced_1 = BinnedSelectKnn(config['n_gravnet_neighbours']+1, gravnetcoords_reduced_1,  rs_reduced_1, max_radius= -1.0, tf_compatible=False, n_bins=None, name='RSU_binned_select_knn_1')
+    gnnidx_reduced_1 = tf.reshape(gnnidx_reduced_1, [-1, config['n_gravnet_neighbours']+1])
+    gndist_reduced_1 = tf.reshape(gndist_reduced_1, [-1, config['n_gravnet_neighbours']+1])
+
+    gndist_reduced_1 = tf.where(gnnidx_reduced_1<0,0.,gndist_reduced_1)
+    gndist_reduced_1 = gndist_reduced_1[:,1:]
+    gndist_reduced_1 = gndist_reduced_1 / reductions[0] #TODO: check if this has to be scaled differently
+    gnnidx_reduced_1 = gnnidx_reduced_1[:,1:]
+
+    # Message passing on reduction level
+    x_level_1 = x_reduced_1
+    for i, message in enumerate(config['message_passing'][1]):
+        x_level_1 = DistanceWeightedMessagePassing(
+            name=f"RSU_message_passing_reduction1_iteration_{i}",
+            n_feature_transformation = message,
+            activation='elu',
+        )([x_level_1, gnnidx_reduced_1, gndist_reduced_1])
+        x_level_1 = SphereActivation()(x_level_1)
+
+    back_scattered_level1 = MultiBackScatter()([x_level_1, [(size_0, indices_selected_0)]])
+
+    if config['concat']:
+        x_out = Concatenate()([x_top_level, back_scattered_level1])
+    else:
+        raise NotImplementedError
+
+    return x_out
+
+
+>>>>>>> e1aac17 (add random sampling unit block - to be tested)
 
 
 
@@ -2794,6 +2882,7 @@ def tiny_pc_pool(
         avail_keys = orig_inputs.keys()
         trans = GraphCondensation()
 
+<<<<<<< HEAD
         if "rs_down" in avail_keys:
             trans["rs_down"] = orig_inputs["rs_down"]
         else:
@@ -2807,10 +2896,30 @@ def tiny_pc_pool(
         zeros = ScalarMultiply(0.0)(orig_inputs["features"][:, 0:1])
 
         for k in ["nidx_down", "distsq_down", "sel_idx_up", "weights_down"]:
+=======
+        if 'rs_down' in avail_keys:
+            trans['rs_down'] = orig_inputs['rs_down']
+        else:
+            trans['rs_down'] = orig_inputs['row_splits']
+
+        if 'rs_up' in avail_keys:
+            trans['rs_up'] = orig_inputs['rs_up']
+        else:
+            trans['rs_up'] = orig_inputs['row_splits']
+
+        zeros = ScalarMultiply(0.)(orig_inputs['features'][:,0:1])
+
+        for k in ['nidx_down', 'distsq_down', 'sel_idx_up', 'weights_down']:
+>>>>>>> e1aac17 (add random sampling unit block - to be tested)
             if k in avail_keys:
                 trans[k] = orig_inputs[k]
             else:
                 trans[k] = zeros
+<<<<<<< HEAD
+=======
+
+        return trans, orig_inputs
+>>>>>>> e1aac17 (add random sampling unit block - to be tested)
 
         return trans, orig_inputs
 
@@ -2890,7 +2999,13 @@ def tiny_pc_pool(
         ]
     )  # hard code it here, this is optimised given our datasets
 
+<<<<<<< HEAD
     dist, nidx = SortAndSelectNeighbours(-1)([dist, nidx])  # make it easy for edges
+=======
+    dist,nidx = SortAndSelectNeighbours(-1)([dist,nidx])#make it easy for edges
+
+    dist = Sqrt()(dist)#make a stronger distance gradient for message passing
+>>>>>>> e1aac17 (add random sampling unit block - to be tested)
 
     dist = Sqrt()(dist)  # make a stronger distance gradient for message passing
 
@@ -2949,6 +3064,12 @@ def tiny_pc_pool(
     x_e = Concatenate()([x, x_in])  # skip
     x_e = Dense(16, activation="elu")(x_e)
 
+<<<<<<< HEAD
+=======
+    x_e = Concatenate()([x,x_in])#skip
+    x_e = Dense(16, activation='elu')(x_e)
+
+>>>>>>> e1aac17 (add random sampling unit block - to be tested)
     from GraphCondensationLayers import GetNeighbourMask, CreateGraphCondensationEdges2
 
     # this will determine how much feature / energy is pushed to 'up' vertices (or to /dev/null in case of noise)
