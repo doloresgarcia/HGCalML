@@ -213,7 +213,7 @@ class plotEventDuringTraining(plotDuringTrainingBase):
                         keys.append(k)
             #print("Data keys", data.keys())
             #print([(k, data[k].shape) for k in data])
-            df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns = [k for k in data])
+            df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns = keys)
             
             #fig = px.scatter_3d(df, x="recHitX", y="recHitZ", z="recHitY", color="truthHitAssignementIdx", size="recHitLogEnergy")
             #fig.write_html(self.outputfile + str(self.keep_counter) + "_truth.html")
