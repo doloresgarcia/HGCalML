@@ -3,6 +3,7 @@ from DeepJetCore.training.DeepJet_callbacks import PredictCallback
 from multiprocessing import Process
 import numpy as np
 import tensorflow as tf
+import pickle
 
 from OCHits2Showers import process_endcap, OCGatherEnergyCorrFac
 from datastructures import TrainData_NanoML
@@ -128,6 +129,9 @@ class plotEventDuringTraining(plotDuringTrainingBase):
                  beta_threshold=0.01,
                  **kwargs):
         self.beta_threshold=beta_threshold
+        self.out_file_type = kwargs.get("out_file_type", "html")
+        if "out_file_type" in kwargs:
+            del kwargs["out_file_type"]
         super(plotEventDuringTraining, self).__init__(**kwargs)
         
         self.datastorage=None #keep this small
@@ -146,7 +150,7 @@ class plotEventDuringTraining(plotDuringTrainingBase):
             '''
             td = TrainData_NanoML()#contains all dicts
             #row splits not needed
-            feats = td.createFeatureDict(feat,addxycomb=False)
+            feats = td.createFeatureDict(feat, addxycomb=False)
             truths = td.createTruthDict(feat)
             
             predBeta = predicted['pred_beta']
@@ -221,9 +225,20 @@ class plotEventDuringTraining(plotDuringTrainingBase):
                                 template='plotly_dark',
                     color_continuous_scale=px.colors.sequential.Rainbow)
             fig.update_traces(marker=dict(line=dict(width=0)))
-            ccfile = self.outputfile + str(self.keep_counter) + "_ccoords.html"
-            fig.write_html(ccfile)
-            
+            if self.out_file_type != "html":
+                pickle.dump(df, open(self.outputfile + str(self.keep_counter) + "_df.pkl", "wb"))
+                fig.update_layout(
+                    scene=dict(
+                        xaxis=dict(nticks=4, range=[-3, 3], ),
+                        yaxis=dict(nticks=4, range=[-3, 3], ),
+                        zaxis=dict(nticks=4, range=[-3, 3], ), ),
+                    margin=dict(r=0.4, l=0.4, b=0.4, t=0.4))
+                ccfile = self.outputfile + str(self.keep_counter) + "_ccoords.png"
+                fig.write_image(ccfile)
+            else:
+                ccfile = self.outputfile + str(self.keep_counter) + "_ccoords.html"
+                fig.write_html(ccfile)
+
             
             if self.publish is not None:
                 publish(ccfile, self.publish)
@@ -235,9 +250,19 @@ class plotEventDuringTraining(plotDuringTrainingBase):
                                 template='plotly_dark',
                     color_continuous_scale=px.colors.sequential.Rainbow)
             fig.update_traces(marker=dict(line=dict(width=0)))
-            ccfile = self.outputfile + str(self.keep_counter) + "_ccoords_betasize.html"
-            fig.write_html(ccfile)
-            
+            if self.out_file_type != "html":
+                fig.update_layout(
+                    scene=dict(
+                        xaxis=dict(nticks=4, range=[-3, 3], ),
+                        yaxis=dict(nticks=4, range=[-3, 3], ),
+                        zaxis=dict(nticks=4, range=[-3, 3], ), ),
+                    margin=dict(r=0.4, l=0.4, b=0.4, t=0.4))
+                ccfile = self.outputfile + str(self.keep_counter) + "_ccoords_betasize.png"
+                fig.write_image(ccfile)
+            else:
+                ccfile = self.outputfile + str(self.keep_counter) + "_ccoords_betasize.html"
+                fig.write_html(ccfile)
+
             
             if self.publish is not None:
                 publish(ccfile, self.publish)
@@ -251,15 +276,14 @@ class plotEventDuringTraining(plotDuringTrainingBase):
                                 template='plotly_dark',
                     color_continuous_scale=px.colors.sequential.Rainbow)
             fig.update_traces(marker=dict(line=dict(width=0)))
-            ccfile = self.outputfile + str(self.keep_counter) + "_truth.html"
-            fig.write_html(ccfile)
-            
-            
+            if self.out_file_type != "html":
+                ccfile = self.outputfile + str(self.keep_counter) + "_truth.png"
+                fig.write_image(ccfile)
+            else:
+                ccfile = self.outputfile + str(self.keep_counter) + "_truth.html"
+                fig.write_html(ccfile)
             if self.publish is not None:
                 publish(ccfile, self.publish)
-            
-            
-
 
         except Exception as e:
             print(e)
