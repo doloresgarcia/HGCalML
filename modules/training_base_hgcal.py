@@ -12,6 +12,7 @@ class HGCalTraining(training_base):
         if parser is None:
             parser = ArgumentParser('Run the training')
         parser.add_argument("--interactive",   help="prints output to screen", default=False, action="store_true")
+        parser.add_argument("--pretrained", "-p",  help="Path to pretrained model checkpoint", default="", type=str)
         
         #no reason for a lot of validation samples usually
         super().__init__(*args, resumeSilently=True,parser=parser,splittrainandtest=0.95,**kwargs)
@@ -30,6 +31,9 @@ class HGCalTraining(training_base):
         super().compileModel(is_eager=True,
                        loss=None,
                        **kwargs)
+        if self.args.pretrained != "":
+            print("*** Loading pretrained model from", self.args.pretrained)
+            self.keras_model.load_weights(self.args.pretrained)
     
     def trainModel(self,
                    nepochs,
