@@ -361,7 +361,7 @@ class PlotCoordinates(_DebugPlotBase):
         coords = coords[0:rs[1]]
         tidx = tidx[0:rs[1]]
         idxs = idxs[0:rs[1]]
-        if len(tidx.shape) <2:
+        if len(tidx.shape) < 2:
             tidx = tidx[...,tf.newaxis]
         features = features[0:rs[1]]
         if hoverfeat is not None:

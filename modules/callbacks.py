@@ -220,7 +220,7 @@ class plotEventDuringTraining(plotDuringTrainingBase):
             
             fig = px.scatter_3d(df, x="predCCoordsX", y="predCCoordsY", z="predCCoordsZ", 
                                 color="truthHitAssignementIdx", size="recHitLogEnergy",
-                                symbol = "recHitID",
+                                symbol="recHitID",
                                 hover_data=hover_data,
                                 template='plotly_dark',
                     color_continuous_scale=px.colors.sequential.Rainbow)

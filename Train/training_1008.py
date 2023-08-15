@@ -154,7 +154,7 @@ def gravnet_model(Inputs, td, debug_outdir=None, publishpath=None, plot_debug_ev
             plot_every=10,
             outdir=debug_outdir,
             name='input_c_coords',
-            publish = publishpath
+            publish=publishpath
             )([c_coords, energy, t_idx, rs])
 
     ############################################################################
@@ -439,8 +439,6 @@ for i in range(num_events_to_plot):
         on_epoch_end=True,
         use_event=i,
     )]
-
-
 
 # FOR DEBUGGING
 for i in plot_idx:

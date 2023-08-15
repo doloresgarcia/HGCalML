@@ -216,14 +216,3 @@ def layer_global_exchange(vertices_in):
 
     return vertices_out
 
-
-
-
-
-
-
-
-
-
-
-

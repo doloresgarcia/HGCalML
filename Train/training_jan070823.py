@@ -67,9 +67,10 @@ n_gravnet_dims = 3
 
 import globals
 
-if True:  # for testing
-    globals.acc_ops_use_tf_gradients = True
-    globals.knn_ops_use_tf_gradients = True
+
+#if False:  # for testing
+#    globals.acc_ops_use_tf_gradients = True
+#    globals.knn_ops_use_tf_gradients = True
 
 import tensorflow as tf
 
@@ -387,7 +388,7 @@ import os
 
 # establish callbacks
 
-num_events_to_plot = 10
+num_events_to_plot = 4
 
 
 cb = [
@@ -413,6 +414,15 @@ for i in range(num_events_to_plot):
         on_epoch_end=True,
         use_event=i,
     )]
+
+
+cb += [
+    plotClusterSummary(
+        outputfile=train.outputDir + "/clustering/",
+        samplefile=train.val_data.getSamplePath(train.val_data.samples[0]),
+        after_n_batches=200
+        )
+    ]
 
 if USE_WANDB:
     cb += [wandbCallback()]
