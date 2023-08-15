@@ -6,7 +6,7 @@ import tensorflow as tf
 import pickle
 
 from OCHits2Showers import process_endcap, OCGatherEnergyCorrFac
-from datastructures import TrainData_NanoML
+from datastructures import TrainData_NanoML, TrainData_fcc
 import os
 
 import plotly.express as px
@@ -17,8 +17,8 @@ from plotting_tools import publish, shuffle_truth_colors
 from DebugLayers import _DebugPlotBase
 from DeepJetCore import TrainData
 from DeepJetCore.dataPipeline import TrainDataGenerator
-       
-       
+
+
 class plotDuringTrainingBase(PredictCallback):
     def __init__(self,
                  outputfile="",
@@ -66,7 +66,7 @@ class plotClusteringDuringTraining(plotDuringTrainingBase):
      
     def _make_plot(self, counter, feat, predicted, truth):#all these are lists and also include row splits
         try:
-            td = TrainData_NanoML()#contains all dicts
+            td = TrainData_fcc()#contains all dicts
             #row splits not needed
             feats = td.createFeatureDict(feat,addxycomb=False)
             backgather = predicted[self.use_backgather_idx]
@@ -93,7 +93,7 @@ class plotClusteringDuringTraining(plotDuringTrainingBase):
             for k in data.keys():
                 data[k] = data[k][not removednoise]
             
-            df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns = [k for k in data])
+            df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns=[k for k in data])
             
             shuffle_truth_colors(df)
             
@@ -148,6 +148,7 @@ class plotEventDuringTraining(plotDuringTrainingBase):
              pred_time, 
              pred_id
             '''
+
             td = TrainData_NanoML()#contains all dicts
             #row splits not needed
             feats = td.createFeatureDict(feat, addxycomb=False)
@@ -203,8 +204,15 @@ class plotEventDuringTraining(plotDuringTrainingBase):
             
             for k in data.keys():
                 data[k] = data[k][removednoise]
-            
-            
+            keys = []
+            for k in data:
+                for s in range(data[k].shape[1]):
+                    if s > 0:
+                        keys.append(k + "_" + str(s))
+                    else:
+                        keys.append(k)
+            #print("Data keys", data.keys())
+            #print([(k, data[k].shape) for k in data])
             df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns = [k for k in data])
             
             #fig = px.scatter_3d(df, x="recHitX", y="recHitZ", z="recHitY", color="truthHitAssignementIdx", size="recHitLogEnergy")
