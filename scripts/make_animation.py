@@ -19,12 +19,12 @@ def cmp_func(a, b):
 
 
 # TODO: change in_folder to the output of plot_clustering_space_1008.py
-IN_FOLDER = "/eos/user/g/gkrzmanc/ds2507results_bk/philip-dataset-140823/cluster_coords_by_epoch"
+IN_FOLDER = "/eos/user/m/mgarciam/trainings_karolina/logs_condor_spread_15_20/cluster_coords_by_epoch"
 
 
 # TODO: Change this to your event IDs
-events = [1, 2, 3]   # what events to animate
-events_render = [1, 2, 3] # for what events to render the animation
+events = list(range(10))   # what events to animate
+events_render = list(range(10))  # for what events to render the animation
 
 from pathlib import Path
 
@@ -51,12 +51,22 @@ for event in events:
         fold = frames[i]
         truth_img = os.path.join(fold, "0_truth.png")
         coords_betasize = os.path.join(fold, "0_ccoords_betasize.png")
+        df = os.path.join(fold, "0_df.pkl")
+
         # just "plot" an image to the right
         ax[1].imshow(plt.imread(truth_img))
         ax[1].axis("off")
         ax[1].set_title("Truth")
         ax[0].set_title("Event " + str(event) + " epoch " + epoch_texts[i])
-        ax[0].imshow(plt.imread(coords_betasize))
+        #ax[0].imshow(plt.imread(coords_betasize))
+        df = pd.read_pickle(df)
+        x = df["predCCoordsX"]
+        y = df["predCCoordsY"],
+        color = df["truthHitAssignementIdx"]
+        size = df["(predBeta+0.05)**2"]
+        ax[0].scatter(x, y, c=color, s=size, cmap="viridis")
+        ax[0].set_xlim([-5, 5])
+        ax[0].set_ylim([-5, 5])
         fig.tight_layout()
         fig.savefig(os.path.join(frame_folder, str(i) + ".png"))
         plt.close(fig)

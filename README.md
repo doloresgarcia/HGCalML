@@ -82,3 +82,16 @@ predict_hgcal.py <training_output_path>/KERAS_model.h5  <path_to_dataset>/testin
 
 To analyse the prediction, use the `analyse_hgcal_predictions.py` script.
 
+
+## Make animations
+===============================================================================
+Work in progress, need to fix the perspective etc.
+The training path 
+```
+cd Train
+python3 plot_clustering_space_1008.py  <Path to dataset> <Path to training>
+
+# To create mp4
+python3 scripts/make_animation.py
+```
+
