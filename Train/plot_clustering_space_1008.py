@@ -4,7 +4,7 @@ Run inference and plot clustering. See TODO comments for what you should change.
 import functools
 
 # TODO: change this to your training dir
-IN_DIR = "/eos/user/g/gkrzmanc/ds2507results_bk/philip-dataset-140823"
+IN_DIR = "/eos/user/m/mgarciam/trainings_karolina/cluster_coords_by_epoch"
 
 files = {}
 # (block, epoch) => model file dict
@@ -23,13 +23,16 @@ for file in os.listdir(IN_DIR):
 # key for sorting: first component greater -> second component greater
 #ordered_ids = sorted(files.keys(), key=lambda x: (x[0], x[1]))
 def cmp_func(a, b):
-    if a[0] > b[0]:
-        return True
-    elif a[0] < b[0]:
-        return False
+    a0, a1 = a.split("_")
+    b0, b1 = b.split("_")
+    a0, a1 = int(a0), int(a1)
+    b0, b1 = int(b0), int(b1)
+    if a0 > b0:
+        return 1
+    elif a0 < b0:
+        return -1
     else:
-        return a[1] > b[1]
-
+        return int(a1 > b1) * 2 - 1
 
 ordered_ids = list(files.keys())
 ordered_ids.sort(key=functools.cmp_to_key(cmp_func))

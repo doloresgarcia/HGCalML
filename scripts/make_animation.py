@@ -11,11 +11,11 @@ def cmp_func(a, b):
     a0, a1 = int(a0), int(a1)
     b0, b1 = int(b0), int(b1)
     if a0 > b0:
-        return True
+        return 1
     elif a0 < b0:
-        return False
+        return -1
     else:
-        return a1 > b1
+        return int(a1 > b1) * 2 - 1
 
 
 # TODO: change in_folder to the output of plot_clustering_space_1008.py
@@ -23,15 +23,18 @@ IN_FOLDER = "/eos/user/m/mgarciam/trainings_karolina/logs_condor_spread_15_20/cl
 
 
 # TODO: Change this to your event IDs
-events = list(range(10))   # what events to animate
-events_render = list(range(10))  # for what events to render the animation
+events = []   # what events to animate
+events_render = [0]  # for what events to render the animation
 
 from pathlib import Path
 
 files = os.listdir(IN_FOLDER)
 files = [x for x in files if not (x.startswith("frames") or x.startswith("anim"))]
-files_ids = [(int(f.split("_")[0]), int(f.split("_")[1])) for f in files]
-files.sort(key=functools.cmp_to_key(cmp_func))
+#files_ids = [(int(f.split("_")[0]), int(f.split("_")[1])) for f in files]
+print("Unsorted:", files)
+files = sorted(files, key=functools.cmp_to_key(cmp_func))
+print(files)
+
 
 for event in events:
     print("  *********  Event", event, "  *********  ")
@@ -63,7 +66,7 @@ for event in events:
         x = df["predCCoordsX"]
         y = df["predCCoordsY"],
         color = df["truthHitAssignementIdx"]
-        size = df["(predBeta+0.05)**2"]
+        size = df["(predBeta+0.05)**2"]*30
         ax[0].scatter(x, y, c=color, s=size, cmap="viridis")
         ax[0].set_xlim([-5, 5])
         ax[0].set_ylim([-5, 5])
@@ -83,7 +86,7 @@ for event in events_render:
         for file in sorted(os.listdir(frame_folder), key=lambda x: int(x.split(".")[0])):
             f.write("file " + os.path.join(frame_folder, file) + "\n")
     out_file = os.path.join(output_folder, "event_" + str(event) + ".mp4")
-    cmd = "ffmpeg   -f concat  -r 14 -safe 0 -i '{}/filelist.txt' -c:v libx264 -pix_fmt yuv420p {}".format(output_folder, out_file)
+    cmd = "ffmpeg -y -f concat -r 14 -safe 0 -i '{}/filelist.txt' -c:v libx264 -pix_fmt yuv420p {}".format(output_folder, out_file)
     os.system(cmd)
     print("  *********  Done rendering event ", event, "  *********  ")
 
