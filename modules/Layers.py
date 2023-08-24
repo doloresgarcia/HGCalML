@@ -71,6 +71,8 @@ global_layers_list["RaggedGlobalExchange"] = RaggedGlobalExchange
 
 ##GravNet...
 
+from GravNetLayersRagged import RandomSampling
+global_layers_list['RandomSampling']=RandomSampling
 
 from GravNetLayersRagged import ShiftDistance
 
