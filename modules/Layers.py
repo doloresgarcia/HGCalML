@@ -404,7 +404,6 @@ global_layers_list['LLRegulariseGravNetSpace'] = LLRegulariseGravNetSpace
 
 
 #ragged layers module
->>>>>>> 6ba8042 (fix the missing loss layers)
 from RaggedLayers import ragged_layers
 
 global_layers_list.update(ragged_layers)
@@ -431,6 +430,7 @@ from LossLayers import (
     LLNeighbourhoodClassifier,
 )
 from LossLayers import LLFullObjectCondensationUncertainty, LLFullObjectCondensationID
+
 from LossLayers import LLExtendedObjectCondensation
 from LossLayers import (
     LLEdgeClassifier,
@@ -445,6 +445,10 @@ from LossLayers import (
     LLFullOCThresholds,
     LLLocalEnergyConservation,
 )
+
+from LossLayers import LLExtendedObjectCondensation, LLExtendedObjectCondensation2
+from LossLayers import LLEdgeClassifier, AmbiguousTruthToNoiseSpectator, LLGoodNeighbourHood, LLKnnPushPullObjectCondensation
+from LossLayers import LLEnergySums,LLKnnSimpleObjectCondensation, LLPushTracks, LLFullOCThresholds, LLLocalEnergyConservation
 from LossLayers import LLRegulariseGravNetSpace
 import traceback
 import os
@@ -487,6 +491,28 @@ global_layers_list["LLNeighbourhoodClassifier"] = LLNeighbourhoodClassifier
 global_layers_list["LLEdgeClassifier"] = LLEdgeClassifier
 global_layers_list["LLGoodNeighbourHood"] = LLGoodNeighbourHood
 global_layers_list["LLRegulariseGravNetSpace"] = LLRegulariseGravNetSpace
+
+global_layers_list['LLOCThresholds']=LLOCThresholds
+global_layers_list['LLLocalEnergyConservation']=LLLocalEnergyConservation
+global_layers_list['LLFullOCThresholds']=LLFullOCThresholds
+global_layers_list['LLFillSpace']=LLFillSpace
+global_layers_list['LLClusterCoordinates']=LLClusterCoordinates
+global_layers_list['LLLocalClusterCoordinates']=LLLocalClusterCoordinates
+global_layers_list['LLKnnSimpleObjectCondensation']=LLKnnSimpleObjectCondensation
+global_layers_list['LLKnnPushPullObjectCondensation']=LLKnnPushPullObjectCondensation
+global_layers_list['LLBasicObjectCondensation']=LLBasicObjectCondensation
+global_layers_list['LLFullObjectCondensation']=LLFullObjectCondensation
+global_layers_list['LLFullObjectCondensationUncertainty']=LLFullObjectCondensationUncertainty
+global_layers_list['LLExtendedObjectCondensation']=LLExtendedObjectCondensation
+global_layers_list['LLExtendedObjectCondensation2']=LLExtendedObjectCondensation2
+global_layers_list['LLFullObjectCondensationID']=LLFullObjectCondensationID
+global_layers_list['LLGraphCondOCLoss']=LLGraphCondOCLoss
+global_layers_list['LLPFCondensates']=LLPFCondensates
+global_layers_list['LLNeighbourhoodClassifier']=LLNeighbourhoodClassifier
+global_layers_list['LLEdgeClassifier']=LLEdgeClassifier
+global_layers_list['LLGoodNeighbourHood']=LLGoodNeighbourHood
+global_layers_list['LLRegulariseGravNetSpace']=LLRegulariseGravNetSpace
+
 
 
 ####### other stuff goes here
