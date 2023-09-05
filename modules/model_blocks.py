@@ -448,11 +448,47 @@ def create_outputs(
     if not fix_distance_scale:
         print("warning: fix_distance_scale=False can lead to issues.")
 
-    pred_beta = Dense(
-        1, activation="sigmoid", name=name_prefix + "_beta", trainable=trainable
-    )(x)
-    pred_ccoords = Dense(
-        n_ccoords,
+    pred_beta = Dense(1,
+        activation='sigmoid',
+        name = name_prefix+'_beta',
+        trainable=trainable)(x)
+    if set_track_betas_to_one:
+        assert is_track is not None
+        pred_beta = Where()([is_track, 0.9999, pred_beta])
+
+    pred_ccoords = Dense(n_ccoords,
+                         use_bias=False,
+                         name = name_prefix+'_clustercoords',
+                         trainable=trainable,
+                         )(x) #bias has no effect
+
+
+    energy_act=None
+    if energy_factor:
+        energy_act='elu'
+    energy_res_act = 'relu'
+    pred_energy = Dense(1,
+        name = name_prefix+'_energy',
+        kernel_initializer='zeros',
+        activation=energy_act,
+        trainable=trainable)(ScalarMultiply(0.01)(x))
+
+    if energy_factor:
+        pred_energy = Add(name= name_prefix+'_one_plus_energy')([OnesLike()(pred_energy),pred_energy])
+
+    pred_energy_low_quantile = Dense(1,
+        name = name_prefix+'_energy_low_quantile',
+        # kernel_initializer='zeros',
+        activation=energy_res_act,
+        trainable=trainable)(x)
+
+    pred_energy_high_quantile = Dense(1,
+        name = name_prefix+'_energy_high_quantile',
+        # kernel_initializer='zeros',
+        activation=energy_res_act,
+        trainable=trainable)(x)
+
+    pred_pos =  Dense(n_pos,
         use_bias=False,
         name=name_prefix + "_clustercoords",
         trainable=trainable,
