@@ -449,7 +449,7 @@ from LossLayers import (
 from LossLayers import LLExtendedObjectCondensation, LLExtendedObjectCondensation2
 from LossLayers import LLEdgeClassifier, AmbiguousTruthToNoiseSpectator, LLGoodNeighbourHood, LLKnnPushPullObjectCondensation
 from LossLayers import LLEnergySums,LLKnnSimpleObjectCondensation, LLPushTracks, LLFullOCThresholds, LLLocalEnergyConservation
-from LossLayers import LLRegulariseGravNetSpace
+from LossLayers import LLRegulariseGravNetSpace, LLSpectatorPenalty
 import traceback
 import os
 
@@ -512,6 +512,7 @@ global_layers_list['LLNeighbourhoodClassifier']=LLNeighbourhoodClassifier
 global_layers_list['LLEdgeClassifier']=LLEdgeClassifier
 global_layers_list['LLGoodNeighbourHood']=LLGoodNeighbourHood
 global_layers_list['LLRegulariseGravNetSpace']=LLRegulariseGravNetSpace
+global_layers_list['LLSpectatorPenalty']=LLSpectatorPenalty
 
 
 
