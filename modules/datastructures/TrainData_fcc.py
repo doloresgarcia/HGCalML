@@ -10,7 +10,10 @@ import pickle
 import pandas as pd
 import pdb
 
-NORMALIZE_MINMAX = True
+# import torch
+# from torch_scatter import scatter_sum
+
+NORMALIZE_MINMAX = False
 
 
 def to_numpy(lst):
@@ -21,7 +24,7 @@ n_id_classes = 22
 
 
 def calc_eta(x, y, z):
-    rsq = np.sqrt(x ** 2 + y ** 2)
+    rsq = np.sqrt(x**2 + y**2)
     return -1 * np.sign(z) * np.log(rsq / np.abs(z + 1e-3) / 2.0 + 1e-3)
 
 
@@ -60,9 +63,25 @@ particle_ids = [
 # IMPORTANT: use absolute_value and sign in a separate field
 
 particle_ids = [int(x) for x in particle_ids]
-
-
 # other = [int(x) for x in other]
+
+#! TODO: for this to work this func needs to be ported to numpy
+# def get_ratios(e_hits, part_idx, y):
+#     """Obtain the percentage of energy of the particle present in the hits
+
+#     Args:
+#         e_hits (_type_): _description_
+#         part_idx (_type_): _description_
+#         y (_type_): _description_
+
+#     Returns:
+#         _type_: _description_
+#     """
+#     energy_from_showers = scatter_sum(e_hits, part_idx.long(), dim=0)
+#     y_energy = y
+#     energy_from_showers = energy_from_showers[1:]
+#     assert len(energy_from_showers) > 0
+#     return (energy_from_showers.flatten() / y_energy).tolist()
 
 
 def find_cluster_id(hit_particle_link):
@@ -111,16 +130,69 @@ def find_mask_no_energy(hit_particle_link, hit_type_a):
     return mask, mask_particles
 
 
+def find_mask_no_energy1(hit_particle_link, hit_type_a, hit_energies, y):
+    """This function remove particles with tracks only and remove particles with low fractions
+
+    Args:
+        hit_particle_link (_type_): _description_
+        hit_type_a (_type_): _description_
+        hit_energies (_type_): _description_
+        y (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    energy_cut = 0.25
+    # REMOVE THE WEIRD ONES
+    list_p = np.unique(hit_particle_link)
+    list_remove = []
+    part_frac = torch.tensor(get_ratios(hit_energies, hit_particle_link, y))
+    print("part_frac", part_frac)
+    filt1 = (
+        (torch.where(part_frac >= energy_cut)[0] + 1).long().tolist()
+    )  # only keep these particles
+
+    for p in list_p:
+        mask = hit_particle_link == p
+        hit_types = np.unique(hit_type_a[mask])
+        if (
+            np.array_equal(hit_types, [0, 1]) or int(p) not in filt1
+        ):  # This is commented to disable filtering
+            list_remove.append(p)
+            assert part_frac[int(p) - 1] < energy_cut
+
+    if len(list_remove) > 0:
+        mask = np.full((len(hit_particle_link)), False, dtype=bool)
+        for p in list_remove:
+            mask1 = hit_particle_link == p
+            mask = mask1 + mask
+
+    else:
+        mask = np.full((len(hit_particle_link)), False, dtype=bool)
+
+    if len(list_remove) > 0:
+        mask_particles = np.full((len(list_p)), False, dtype=bool)
+        for p in list_remove:
+            mask_particles1 = list_p == p
+            mask_particles = mask_particles1 + mask_particles
+
+    else:
+        mask_particles = np.full((len(list_p)), False, dtype=bool)
+
+    return mask, mask_particles
+
+
 # @jit(nopython=False)
 def truth_loop(
-        link_list: list,
-        t_dict: dict,
-        part_p_list: list,
-        part_pid_list: list,
-        part_theta_list: list,
-        part_phi_list: list,
-        hit_type_list: list,
+    link_list: list,
+    t_dict: dict,
+    part_p_list: list,
+    part_pid_list: list,
+    part_theta_list: list,
+    part_phi_list: list,
+    hit_type_list: list,
 ):
+
     nevts = len(link_list)
     masks = []
 
@@ -217,7 +289,7 @@ class TrainData_fcc(TrainData):
                                (and rechit calibrated) energy, including fractional assignments)
          - t_is_unique :       an index that is 1 for exactly one hit per truth shower
          - row_splits
-
+         
         """
         out = {
             "features": ilist[0],
@@ -372,7 +444,7 @@ class TrainData_fcc(TrainData):
         return out
 
     def convertFromSourceFile(
-            self, filename, weighterobjects, istraining, treename="events"
+        self, filename, weighterobjects, istraining, treename="events"
     ):
 
         fileTimeOut(filename, 10)  # wait 10 seconds for file in case there are hiccups
@@ -407,6 +479,8 @@ class TrainData_fcc(TrainData):
         hit_genlink = to_numpy(tree["hit_genlink0"].array().tolist())
         # print(type(hit_genlink), hit_genlink)
         part_p = to_numpy(tree["part_p"].array().tolist())
+        # part_m = to_numpy(tree["part_m"].array().tolist())
+        # part_e = np.sqrt(part_m**2 + part_p**2)
         part_pid = to_numpy(tree["part_pid"].array().tolist())
         part_theta = to_numpy(tree["part_theta"].array().tolist())
         part_phi = to_numpy(tree["part_phi"].array().tolist())
@@ -419,6 +493,9 @@ class TrainData_fcc(TrainData):
             print("T", hit_type[ei].shape)
             # print("------", hit_type[ei].shape, hit_genlink[ei].shape, cluster_id, unique_list_particles)
             # print(np.unique(hit_genlink[ei]))
+            # mask_hits, mask_particles = find_mask_no_energy(
+            #     hit_genlink[ei], hit_type[ei], hit_e[ei], part_e[ei]
+            # )
             mask_hits, mask_particles = find_mask_no_energy(
                 hit_genlink[ei], hit_type[ei]
             )
@@ -577,14 +654,14 @@ class TrainData_fcc(TrainData):
         )
 
     def convertFromSourceFileOld(
-            self, filename, weighterobjects, istraining, treename="events"
+        self, filename, weighterobjects, istraining, treename="events"
     ):
 
         fileTimeOut(filename, 10)  # wait 10 seconds for file in case there are hiccups
         tree = uproot.open(filename)[treename]
 
         """
-
+        
         hit_x, hit_y, hit_z: the spatial coordinates of the voxel centroids that registered the hit
         hit_dE: the energy registered in the voxel (signal + BIB noise)
         recHit_dE: the 'reconstructed' hit energy, i.e. the energy deposited by signal only
@@ -683,7 +760,7 @@ class TrainData_fcc(TrainData):
         )
 
     def writeOutPrediction(
-            self, predicted, features, truth, weights, outfilename, inputfile
+        self, predicted, features, truth, weights, outfilename, inputfile
     ):
         outfilename = os.path.splitext(outfilename)[0] + ".bin.gz"
         # print("hello", outfilename, inputfile)
@@ -722,7 +799,7 @@ def spherical_to_cartesian(theta, phi, r, normalized=False):
     return x, y, z
 
 
-def normalize_min_max(hit_x, is_z=False):
-    # 3330 is the outer radius of the HcalBarrel
-    new_hitx = hit_x / 3330
-    return new_hitx
+# def normalize_min_max(hit_x, is_z=False):
+#     # 3330 is the outer radius of the HcalBarrel
+#     new_hitx = hit_x / 3330
+#     return new_hitx
