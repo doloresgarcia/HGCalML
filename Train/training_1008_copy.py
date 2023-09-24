@@ -452,21 +452,54 @@ simpleMetricsCallback(
 """
 
 
+# cb = [
+#     simpleMetricsCallback(
+#         output_file=train.outputDir + "/val_metrics.html",
+#         call_on_epoch=True,
+#         select_metrics="val_*",
+#         publish=publishpath,  # no additional directory here (scp cannot create one)
+#     ),
+#     simpleMetricsCallback(
+#         output_file=train.outputDir + "/metrics.html",
+#         record_frequency=record_frequency,
+#         plot_frequency=plotfrequency,
+#         select_metrics="*loss",
+#         publish=publishpath,  # no additional directory here (scp cannot create one)
+#     ),
+# ]
+
 cb = [
-    simpleMetricsCallback(
-        output_file=train.outputDir + "/val_metrics.html",
-        call_on_epoch=True,
-        select_metrics="val_*",
-        publish=publishpath,  # no additional directory here (scp cannot create one)
+    plotClusterSummary(
+        outputfile=train.outputDir + "/clustering/",
+        samplefile=train.train_data.getSamplePath(train.train_data.samples[0]),
+        log_wandb=True,
+        on_epoch_end=True,
     ),
-    simpleMetricsCallback(
-        output_file=train.outputDir + "/metrics.html",
-        record_frequency=record_frequency,
-        plot_frequency=plotfrequency,
-        select_metrics="*loss",
-        publish=publishpath,  # no additional directory here (scp cannot create one)
+    plotEventDuringTraining(
+        outputfile=train.outputDir + "/cluster_coords/0/",
+        samplefile=train.train_data.getSamplePath(train.train_data.samples[0]),
+        on_epoch_end=True,
+    ),
+    plotEventDuringTraining(
+        outputfile=train.outputDir + "/cluster_coords/1/",
+        samplefile=train.train_data.getSamplePath(train.train_data.samples[0]),
+        on_epoch_end=True,
+        use_event=1,
+    ),
+    plotEventDuringTraining(
+        outputfile=train.outputDir + "/cluster_coords/2/",
+        samplefile=train.train_data.getSamplePath(train.train_data.samples[0]),
+        on_epoch_end=True,
+        use_event=2,
+    ),
+    plotEventDuringTraining(
+        outputfile=train.outputDir + "/cluster_coords/3/",
+        samplefile=train.train_data.getSamplePath(train.train_data.samples[0]),
+        on_epoch_end=True,
+        use_event=3,
     ),
 ]
+
 
 if USE_WANDB:
     cb += [wandbCallback()]
@@ -485,10 +518,10 @@ if USE_WANDB:
 ]"""
 
 # FOR DEBUGGING
-# for i in range(len(cb) - 1):
-#    cb[i].model = train.keras_model
-#    print("Calling callback", i, " (before training the model further)")
-#    cb[i].predict_and_call(1)
+for i in range(len(cb) - 1):
+    cb[i].model = train.keras_model
+    print("Calling callback", i, " (before training the model further)")
+    cb[i].predict_and_call(1)
 
 
 train.change_learning_rate(LEARNINGRATE)
