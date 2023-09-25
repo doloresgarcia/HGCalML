@@ -192,7 +192,7 @@ def gravnet_model(
     allcoords = []
 
     coords = ScaledGooeyBatchNorm2(**BATCHNORM_OPTIONS)(coords)
-    coords = coords / 3300
+    coords = coords / (3300)
     gncoords = coords
     for i in range(TOTAL_ITERATIONS):
 
@@ -239,7 +239,7 @@ def gravnet_model(
             name="gn_coords_" + str(i),
             publish=publishpath,
         )([gncoords, energy, t_idx, rs])
-        gncoords = StopGradient()(gncoords)
+        # gncoords = StopGradient()(gncoords)
 
         # x = Concatenate()([gncoords, xgn, x])
         x = Concatenate()([xgn, x])
