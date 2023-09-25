@@ -4679,7 +4679,7 @@ class RaggedGravNeteq(tf.keras.layers.Layer):
 
     def compute_neighbours_and_distancesq(self, coordinates, row_splits, training):
 
-        idx, dist = BinnedSelectKnn(
+        idx, dist, coord_diff = BinnedSelectKnn(
             self.n_neighbours + 1,
             coordinates,
             row_splits,
@@ -4687,6 +4687,7 @@ class RaggedGravNeteq(tf.keras.layers.Layer):
             tf_compatible=False,
             n_bins=self.n_knn_bins,
             name=self.name,
+            return_coord_difs=True,
         )
         idx = tf.reshape(idx, [-1, self.n_neighbours + 1])
         dist = tf.reshape(dist, [-1, self.n_neighbours + 1])
