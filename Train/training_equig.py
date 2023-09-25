@@ -161,8 +161,6 @@ def gravnet_model(
         [x, is_track]
     )
 
-    
-
     x_in = Concatenate()([x_in, is_track, SphereActivation()(x_in)])
     x_in = ScaledGooeyBatchNorm2(**BATCHNORM_OPTIONS)(x_in)
     x_in = Dense(64, activation=DENSE_ACTIVATION)(x_in)
@@ -180,28 +178,20 @@ def gravnet_model(
         name="input_c_coords",
         publish=publishpath,
     )([c_coords, energy, t_idx, rs])
-    
-    coords_in = Concatenate()([coords, pre_selection["prime_coords"]])
+
+    # coords_in = Concatenate()([coords, pre_selection["prime_coords"]])
     ############################################################################
     ##################### now the actual model goes below ######################
     ############################################################################
 
     # extend coordinates already here if needed, starting point for gravnet
 
-    #c_coords = extent_coords_if_needed(c_coords, x, N_GRAVNET)
+    # c_coords = extent_coords_if_needed(c_coords, x, N_GRAVNET)
 
     allfeat = []
 
-    ## not needed, embedding already done in the pre-pooling
-    # x_track = Dense(64,
-    #        activation=DENSE_ACTIVATION,
-    #        kernel_regularizer=DENSE_REGULARIZER)(x)
-    # x_hit = Dense(64,
-    #        activation=DENSE_ACTIVATION,
-    #        kernel_regularizer=DENSE_REGULARIZER)(x)
-    # is_track_bool = tf.cast(is_track, tf.bool)
-    # x = tf.where(is_track_bool, x_track, x_hit)
-    gncoords = c_coords
+    coords = ScaledGooeyBatchNorm2(**BATCHNORM_OPTIONS)(coords)
+    gncoords = coords
     for i in range(TOTAL_ITERATIONS):
 
         # x_skip = x
@@ -239,7 +229,7 @@ def gravnet_model(
             scale=0.01,
             print_loss=True,
             # project = True
-        )([gndist, pre_selection["prime_coords"], gnnidx])
+        )([gndist, coords, gnnidx])
 
         gncoords = PlotCoordinates(
             plot_every=plot_debug_every,
