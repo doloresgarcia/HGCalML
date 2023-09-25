@@ -3,7 +3,7 @@ import os
 import pdb
 import numpy as np
 import tensorflow as tf
-
+from DeepJetCore.DJCLayers import StopGradient
 from select_knn_op import SelectKnn
 from slicing_knn_op import SlicingKnn
 from binned_select_knn_op import BinnedSelectKnn
@@ -4615,6 +4615,12 @@ class RaggedGravNeteq(tf.keras.layers.Layer):
             neighbour_indices, [-1, self.n_neighbours]
         )  # for proper output shape for keras
 
+        # stop gradient? dij
+        # edgeij = f(hi,hj,dij)
+        # x_i = x_i + sum (xi-xj)*f(edgeij)
+        distancesq = StopGradient()(distancesq)
+        # dij' = knn(x_i)
+        # hi = mlp(hj* dij')
         #! compute new coordinates
         radial0 = tf.reshape(distancesq, [-1, 1])
         # print("radial0", radial0)
@@ -4728,4 +4734,210 @@ class RaggedGravNeteq(tf.keras.layers.Layer):
             "n_knn_bins": self.n_knn_bins,
         }
         base_config = super(RaggedGravNeteq, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class RaggedGravNeteqJan(tf.keras.layers.Layer):
+    def __init__(
+        self,
+        n_neighbours: int,
+        n_dimensions: int,
+        n_filters: int,
+        n_propagate: int,
+        return_self=True,
+        sumwnorm=False,
+        feature_activation="relu",
+        use_approximate_knn=False,
+        coord_initialiser_noise=1e-2,
+        use_dynamic_knn=True,
+        debug=False,
+        n_knn_bins=None,
+        _promptnames=None,  # compatibility, does nothing
+        record_metrics=False,  # compatibility, does nothing
+        **kwargs,
+    ):
+        """
+        Call will return output features, coordinates, neighbor indices and squared distances from neighbors
+        Inputs:
+        - features
+        - row splits
+
+        :param n_neighbours: neighbors to do gravnet pass over
+        :param n_dimensions: number of dimensions in spatial transformations
+        :param n_filters:  number of dimensions in output feature transformation, could be list if multiple output
+        features transformations (minimum 1)
+
+        :param n_propagate: how much to propagate in feature tranformation, could be a list in case of multiple
+        :param return_self: for the neighbour indices and distances, switch whether to return the 'self' index and distance (0)
+        :param sumwnorm: normalise distance weights such that their sum is 1. (default False)
+        :param feature_activation: activation to be applied to feature creation (F_LR) (default relu)
+        :param use_approximate_knn: use approximate kNN method (SlicingKnn) instead of exact method (SelectKnn)
+        :param use_dynamic_knn: uses dynamic adjustment of kNN binning derived from previous batches (only in effect together with use_approximate_knn)
+        :param debug: switches on debug output, is not persistent when saving
+        :param n_knn_bins: number of bins for included kNN (default: None=dynamic)
+        :param kwargs:
+        """
+        super(RaggedGravNeteqJan, self).__init__(**kwargs)
+
+        # n_neighbours += 1  # includes the 'self' vertex
+        assert n_neighbours > 1
+        assert not use_approximate_knn  # not needed anymore. Exact one is faster by now
+
+        self.n_neighbours = n_neighbours
+        self.n_dimensions = n_dimensions
+        self.n_filters = n_filters
+        self.return_self = return_self
+        self.sumwnorm = sumwnorm
+        self.feature_activation = feature_activation
+        self.use_approximate_knn = use_approximate_knn
+        self.use_dynamic_knn = use_dynamic_knn
+        self.debug = debug
+        self.n_knn_bins = n_knn_bins
+
+        self.n_propagate = n_propagate
+        self.n_prop_total = 2 * self.n_propagate
+
+        with tf.name_scope(self.name + "/1/"):
+            self.coord_mlp = tf.keras.layers.Dense(
+                self.n_propagate,
+                activation=feature_activation,
+                kernel_initializer="glorot_uniform",
+            )
+        with tf.name_scope(self.name + "/2/"):
+            self.coord_mlp2 = tf.keras.layers.Dense(
+                3, kernel_initializer="glorot_uniform"
+            )
+
+        with tf.name_scope(self.name + "/3/"):
+            self.input_feature_transform = tf.keras.layers.Dense(
+                n_propagate, activation=feature_activation
+            )
+
+        with tf.name_scope(self.name + "/4/"):
+            self.output_feature_transform = tf.keras.layers.Dense(
+                self.n_filters, activation="relu"
+            )  # changed to relu
+
+    def build(self, input_shapes):
+        input_shape = input_shapes[0]
+
+        with tf.name_scope(self.name + "/1/"):
+            self.coord_mlp.build((None, 3 + input_shape[1]))
+
+        with tf.name_scope(self.name + "/2/"):
+            self.coord_mlp2.build((None, self.n_propagate))
+
+        with tf.name_scope(self.name + "/3/"):
+            self.input_feature_transform.build(input_shape)
+        with tf.name_scope(self.name + "/4/"):
+            self.output_feature_transform.build(
+                (input_shape[0], self.n_prop_total + input_shape[1])
+            )
+
+        super(RaggedGravNeteqJan, self).build(input_shape)
+
+    def create_output_features(self, x, neighbour_indices, distancesq):
+        allfeat = []
+        features = x
+
+        features = self.input_feature_transform(features)
+        # print("weights input_feature_transform", self.input_feature_transform.weights)
+        # print("bias input_feature_transform", self.input_feature_transform.bias)
+        prev_feat = features
+        features = self.collect_neighbours(features, neighbour_indices, distancesq)
+        features = tf.reshape(features, [-1, prev_feat.shape[1] * 2])
+        features -= tf.tile(prev_feat, [1, 2])
+        allfeat.append(features)
+
+        features = tf.concat(allfeat + [x], axis=-1)
+        return self.output_feature_transform(features)
+
+    def priv_call(self, inputs, training=None):
+        h_orig = inputs[0]
+        h = h_orig
+        shape_features = h.shape[1]
+        coordinates = inputs[1]
+
+        row_splits = inputs[2]
+        x_all = tf.concat((coordinates, h_orig), axis=1)
+        (
+            neighbour_indices,
+            distancesq,
+            sidx,
+            sdist,
+            coord_diff,
+        ) = self.compute_neighbours_and_distancesq(x_all, row_splits, training)
+        gaus_dist = tf.exp(-10 * distancesq)
+        gaus_dist = tf.reshape(gaus_dist, [-1, self.n_neighbours, 1])
+        gaus_dist = tf.tile(gaus_dist, [1, 1, x_all.shape[1]])
+        trans = coord_diff * gaus_dist
+        trans = tf.reduce_mean(trans, axis=1)
+        # trans = activation(trans)
+        cord_mlp = self.coord_mlp(trans)  # input shape is 3
+        cord_mlp2 = self.coord_mlp2(cord_mlp)
+        coords_out = cord_mlp2 + coordinates  # or before the activation
+        (
+            neighbour_indices,
+            distancesq,
+            sidx,
+            sdist,
+            coord_diff,
+        ) = self.compute_neighbours_and_distancesq(coords_out, row_splits, training)
+        outfeats = self.create_output_features(h_orig, neighbour_indices, distancesq)
+        if self.return_self:
+            neighbour_indices, distancesq = sidx, sdist
+
+        return outfeats, coords_out, neighbour_indices, distancesq
+
+    def call(self, inputs, training):
+        return self.priv_call(inputs, training)
+
+    def compute_neighbours_and_distancesq(self, coordinates, row_splits, training):
+
+        idx, dist, coord_diff = BinnedSelectKnn(
+            self.n_neighbours + 1,
+            coordinates,
+            row_splits,
+            max_radius=-1.0,
+            tf_compatible=False,
+            n_bins=self.n_knn_bins,
+            name=self.name,
+            return_coord_difs=True,
+        )
+        idx = tf.reshape(idx, [-1, self.n_neighbours + 1])
+        dist = tf.reshape(dist, [-1, self.n_neighbours + 1])
+        coord_diff = tf.reshape(
+            coord_diff, [-1, self.n_neighbours + 1, coordinates.shape[1]]
+        )
+        dist = tf.where(idx < 0, 0.0, dist)
+
+        if self.return_self:
+            return idx[:, 1:], dist[:, 1:], idx, dist, coord_diff[:, 1:, :]
+        return idx[:, 1:], dist[:, 1:], None, None, coord_diff[:, 1:, :]
+
+    def collect_neighbours(self, features, neighbour_indices, distancesq):
+        f = None
+        if self.sumwnorm:
+            f, _ = AccumulateKnnSumw(
+                10.0 * distancesq, features, neighbour_indices, mean_and_max=True
+            )
+        else:
+            f, _ = AccumulateKnn(
+                10.0 * distancesq, features, neighbour_indices, mean_and_max=True
+            )
+        return f
+
+    def get_config(self):
+        config = {
+            "n_neighbours": self.n_neighbours,
+            "n_dimensions": self.n_dimensions,
+            "n_filters": self.n_filters,
+            "n_propagate": self.n_propagate,
+            "return_self": self.return_self,
+            "sumwnorm": self.sumwnorm,
+            "feature_activation": self.feature_activation,
+            "use_approximate_knn": self.use_approximate_knn,
+            "n_knn_bins": self.n_knn_bins,
+        }
+        base_config = super(RaggedGravNeteqJan, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
