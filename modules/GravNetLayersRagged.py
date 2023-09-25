@@ -4520,16 +4520,22 @@ class RaggedGravNeteq(tf.keras.layers.Layer):
 
         with tf.name_scope(self.name + "/1/"):
             self.edge_mlp = tf.keras.layers.Dense(
-                128, activation=feature_activation, kernel_initializer="glorot_uniform"
+                self.n_propagate,
+                activation=feature_activation,
+                kernel_initializer="glorot_uniform",
             )
         with tf.name_scope(self.name + "/2/"):
             self.edge_mlp2 = tf.keras.layers.Dense(
-                128, activation=feature_activation, kernel_initializer="glorot_uniform"
+                self.n_propagate,
+                activation=feature_activation,
+                kernel_initializer="glorot_uniform",
             )
 
         with tf.name_scope(self.name + "/3/"):
             self.coord_mlp = tf.keras.layers.Dense(
-                128, activation=feature_activation, kernel_initializer="glorot_uniform"
+                self.n_propagate,
+                activation=feature_activation,
+                kernel_initializer="glorot_uniform",
             )
         with tf.name_scope(self.name + "/4/"):
             self.coord_mlp2 = tf.keras.layers.Dense(
@@ -4556,13 +4562,13 @@ class RaggedGravNeteq(tf.keras.layers.Layer):
         with tf.name_scope(self.name + "/1/"):
             self.edge_mlp.build((None, 2 * input_shape[1] + 1))
         with tf.name_scope(self.name + "/2/"):
-            self.edge_mlp2.build((None, 128))
+            self.edge_mlp2.build((None, self.n_propagate))
 
         with tf.name_scope(self.name + "/3/"):
-            self.coord_mlp.build((None, 128))
+            self.coord_mlp.build((None, self.n_propagate))
 
         with tf.name_scope(self.name + "/4/"):
-            self.coord_mlp2.build((None, 128))
+            self.coord_mlp2.build((None, self.n_propagate))
 
         with tf.name_scope(self.name + "/5/"):
             self.input_feature_transform.build(input_shape)
