@@ -189,6 +189,7 @@ def gravnet_model(
     # c_coords = extent_coords_if_needed(c_coords, x, N_GRAVNET)
 
     allfeat = []
+    allcoords = []
 
     coords = ScaledGooeyBatchNorm2(**BATCHNORM_OPTIONS)(coords)
     coords = coords / 3300
@@ -264,13 +265,16 @@ def gravnet_model(
         # x = Add()([x,x_skip])
 
         allfeat.append(x)
+        allcoords.append(gncoords)
         if len(allfeat) > 1:
             x = Concatenate()(allfeat)
         else:
             x = allfeat[0]
 
+    coords_all = Concatenate()(allcoords)
     # x = RaggedGlobalExchange()([x,rs])
     # x = Concatenate()([x,SphereActivation()(x)])
+    x = Concatenate()([coords_all, x])
     x = Dense(64, name="Last_Dense_1", activation=DENSE_ACTIVATION)(x)
     x = Dense(64, name="Last_Dense_2", activation=DENSE_ACTIVATION)(x)
     # x = Dropout(1e-9)(x)
