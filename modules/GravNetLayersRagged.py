@@ -4568,7 +4568,7 @@ class RaggedGravNeteq(tf.keras.layers.Layer):
             self.input_feature_transform.build(input_shape)
         with tf.name_scope(self.name + "/6/"):
             self.output_feature_transform.build(
-                (input_shape[0], self.n_prop_total + input_shape[2])
+                (input_shape[0], self.n_prop_total + input_shape[1])
             )
 
         super(RaggedGravNeteq, self).build(input_shape)
