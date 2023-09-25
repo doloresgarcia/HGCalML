@@ -192,7 +192,7 @@ def gravnet_model(
     allcoords = []
 
     coords = ScaledGooeyBatchNorm2(**BATCHNORM_OPTIONS)(coords)
-    coords = coords / (3300)
+    coords = coords / (3300/2)
     gncoords = coords
     for i in range(TOTAL_ITERATIONS):
 
