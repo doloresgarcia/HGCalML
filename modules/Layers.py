@@ -295,6 +295,10 @@ from GravNetLayersRagged import RaggedGravNet
 
 global_layers_list["RaggedGravNet"] = RaggedGravNet
 
+from GravNetLayersRagged import RaggedGravNeteq
+
+global_layers_list["RaggedGravNeteq"] = RaggedGravNeteq
+
 from EGCN import RaggedEGCN
 
 global_layers_list["RaggedEGCN"] = RaggedEGCN
