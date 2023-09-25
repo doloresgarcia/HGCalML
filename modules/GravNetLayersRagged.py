@@ -4580,11 +4580,9 @@ class RaggedGravNeteq(tf.keras.layers.Layer):
         features = self.input_feature_transform(features)
         # print("weights input_feature_transform", self.input_feature_transform.weights)
         # print("bias input_feature_transform", self.input_feature_transform.bias)
-        print("features shape 1", features.shape)
         prev_feat = features
         features = self.collect_neighbours(features, neighbour_indices, distancesq)
         features = tf.reshape(features, [-1, prev_feat.shape[1] * 2])
-        print("features shape 2", features.shape)
         features -= tf.tile(prev_feat, [1, 2])
         allfeat.append(features)
 
@@ -4654,7 +4652,7 @@ class RaggedGravNeteq(tf.keras.layers.Layer):
         ) = self.compute_neighbours_and_distancesq(coods_new, row_splits, training)
         distancesq = tf.reshape(distancesq, [-1, self.n_neighbours])
 
-        outfeats = self.create_output_features(h, neighbour_indices, distancesq)
+        outfeats = self.create_output_features(h_orig, neighbour_indices, distancesq)
         if self.return_self:
             neighbour_indices, distancesq = sidx, sdist
 
