@@ -4634,13 +4634,15 @@ class RaggedGravNeteq(tf.keras.layers.Layer):
         # tf.print(self.coord_mlp.weights)
         # print("cord mlp", cord_mlp)
         cord_mlp2 = self.coord_mlp2(cord_mlp)
-        # print("WEIGHTS CORD MLP 2 ")
-        # tf.print(self.coord_mlp2.weights)
+        print("CORD MLP 2 ")
         cord_mlp2 = tf.reshape(cord_mlp2, [-1, self.n_neighbours, 1])
+        print(cord_mlp2)
         cord_mlp2 = tf.tile(cord_mlp2, [1, 1, 3])
         trans = coord_diff * cord_mlp2
         trans = tf.reduce_mean(trans, axis=1)
         # print("trans", trans)
+        print("coordinates", coordinates)
+        print("trans", trans)
         coods_new = coordinates + trans
 
         (
