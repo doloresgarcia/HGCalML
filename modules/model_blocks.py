@@ -580,22 +580,8 @@ def create_outputs(
         return pred_beta, pred_ccoords, pred_dist, pred_energy, pred_energy_low_quantile, pred_energy_high_quantile, pred_pos, pred_time, pred_time_unc, pred_id
 
 
+"""
 
-
-def re_integrate_to_full_hits(
-        pre_selection,
-        pred_ccoords,
-        pred_beta,
-        pred_ccoords,
-        pred_dist,
-        pred_energy,
-        pred_energy_low_quantile,
-        pred_energy_high_quantile,
-        pred_pos,
-        pred_time,
-        pred_time_unc,
-        pred_id,
-    )
 
 
 from GravNetLayersRagged import MultiBackScatterOrGather
@@ -618,7 +604,7 @@ def re_integrate_to_full_hits(
 ):
 
     assert dict_output  # only dict output
-    
+    """
     To be called after OC loss is applied to pre-selected outputs to bring it all back to the full dimensionality
     all hits that have been selected before and cannot be backgathered will be assigned coordinates far away,
     and a zero beta value.
