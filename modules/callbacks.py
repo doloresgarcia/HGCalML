@@ -88,6 +88,9 @@ class plotClusteringDuringTraining(plotDuringTrainingBase):
             #remove removed noise
             for k in data.keys():
                 data[k] = data[k][not removednoise]
+            datacols = []
+            for k in data:
+                datacols += [k] * data[k].shape[1]
 
             df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns = [k for k in data])
 
