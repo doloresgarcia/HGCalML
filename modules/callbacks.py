@@ -288,8 +288,11 @@ class plotEventDuringTraining(plotDuringTrainingBase):
         data['predCCoordsX']=coords2D[:,0:1]
         data['predCCoordsY']=coords2D[:,1:2]
 
+        datacols = []
+            for k in data:
+                datacols += [k] * data[k].shape[1]
 
-        df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns = [k for k in data])
+        df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns = datacols)
         shuffle_truth_colors(df)
 
 
@@ -521,8 +524,10 @@ class plotGravNetCoordsDuringTraining(plotDuringTrainingBase):
             data['coord A'] = coords[:,0:1]
             data['coord B'] = coords[:,1:2]
             data['coord C'] = coords[:,2:3]
-
-            df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns = [k for k in data])
+            datacols = []
+            for k in data:
+                datacols += [k] * data[k].shape[1]
+            df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns = datacols)
             shuffle_truth_colors(df)
 
             fig = px.scatter_3d(df, x="coord A", y="coord B", z="coord C",
@@ -604,9 +609,11 @@ class plotGravNetCoordsDuringTraining(plotDuringTrainingBase):
 
         data["predCCoordsX"] = coords2D[:, 0:1]
         data["predCCoordsY"] = coords2D[:, 1:2]
-
+        datacols = []
+            for k in data:
+                datacols += [k] * data[k].shape[1]
         df = pd.DataFrame(
-            np.concatenate([data[k] for k in data], axis=1), columns=[k for k in data]
+            np.concatenate([data[k] for k in data], axis=1), columns=datacols
         )
         shuffle_truth_colors(df)
 
@@ -672,10 +679,12 @@ class plotGravNetCoordsDuringTraining(plotDuringTrainingBase):
             data["coord A"] = coords[:, 0:1]
             data["coord B"] = coords[:, 1:2]
             data["coord C"] = coords[:, 2:3]
-
+            datacols = []
+            for k in data:
+                datacols += [k] * data[k].shape[1]
             df = pd.DataFrame(
                 np.concatenate([data[k] for k in data], axis=1),
-                columns=[k for k in data],
+                columns=datacols,
             )
             shuffle_truth_colors(df)
 
