@@ -618,7 +618,7 @@ def re_integrate_to_full_hits(
 ):
 
     assert dict_output  # only dict output
-    """
+    
     To be called after OC loss is applied to pre-selected outputs to bring it all back to the full dimensionality
     all hits that have been selected before and cannot be backgathered will be assigned coordinates far away,
     and a zero beta value.
