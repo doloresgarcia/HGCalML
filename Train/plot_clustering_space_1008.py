@@ -396,8 +396,7 @@ for file_id in ordered_ids:
         cb += [plotEventDuringTraining(
             outputfile=train.outputDir + "/cluster_coords_by_epoch/{}_{}/{}/".format(file_id[0], file_id[1], i),
             samplefile=train.train_data.getSamplePath(train.train_data.samples[0]),
-            use_event=i,
-            out_file_type="png"
+            use_event=i
         )]
         for i in range(len(cb)):
             cb[i].model = train.keras_model
