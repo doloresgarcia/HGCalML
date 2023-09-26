@@ -289,8 +289,8 @@ class plotEventDuringTraining(plotDuringTrainingBase):
         data['predCCoordsY']=coords2D[:,1:2]
 
         datacols = []
-            for k in data:
-                datacols += [k] * data[k].shape[1]
+        for k in data:
+            datacols += [k] * data[k].shape[1]
 
         df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns = datacols)
         shuffle_truth_colors(df)
