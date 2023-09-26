@@ -23,8 +23,9 @@ IN_FOLDER = "/eos/user/m/mgarciam/trainings_karolina/logs_condor_spread_15_20/cl
 
 
 # TODO: Change this to your event IDs
-events = []   # what events to animate
-events_render = [0]  # for what events to render the animation
+events = list(range(10))  # what events to animate
+events_render = list(range(10))  # for what events to render the animation
+
 
 from pathlib import Path
 
