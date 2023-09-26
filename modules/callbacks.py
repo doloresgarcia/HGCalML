@@ -92,7 +92,7 @@ class plotClusteringDuringTraining(plotDuringTrainingBase):
             for k in data:
                 datacols += [k] * data[k].shape[1]
 
-            df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns = [k for k in data])
+            df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns = datacols)
 
             shuffle_truth_colors(df)
 
@@ -207,8 +207,10 @@ class plotEventDuringTraining(plotDuringTrainingBase):
             for k in data.keys():
                 data[k] = data[k][removednoise]
 
-
-            df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns = [k for k in data])
+            datacols = []
+            for k in data:
+                datacols += [k] * data[k].shape[1]
+            df = pd.DataFrame (np.concatenate([data[k] for k in data],axis=1), columns = datacols)
 
             #fig = px.scatter_3d(df, x="recHitX", y="recHitZ", z="recHitY", color="truthHitAssignementIdx", size="recHitLogEnergy")
             #fig.write_html(self.outputfile + str(self.keep_counter) + "_truth.html")
