@@ -445,13 +445,10 @@ def create_outputs(
         * pred_time                     10 + Dense(1)
         * pred_time_unc                 1 + Dense(1)
         * pred_id                       Dense(n_classes)
-<<<<<<< HEAD
-    """
-=======
+    '''
         if predict_specator_weights:
             * pred_spectator_weights    Dense(1) with relu and L2 regularization
     '''
->>>>>>> 3d24439 (Add option to predict and use spectator weights)
     if not fix_distance_scale:
         print("warning: fix_distance_scale=False can lead to issues.")
 
