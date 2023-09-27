@@ -449,6 +449,7 @@ def create_outputs(
         if predict_specator_weights:
             * pred_spectator_weights    Dense(1) with relu and L2 regularization
     '''
+    """
     if not fix_distance_scale:
         print("warning: fix_distance_scale=False can lead to issues.")
 
@@ -579,8 +580,6 @@ def create_outputs(
     else:
         return pred_beta, pred_ccoords, pred_dist, pred_energy, pred_energy_low_quantile, pred_energy_high_quantile, pred_pos, pred_time, pred_time_unc, pred_id
 
-
-"""
 
 
 
