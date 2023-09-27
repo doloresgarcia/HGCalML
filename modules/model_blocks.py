@@ -462,7 +462,7 @@ def create_outputs(
         assert is_track is not None
         pred_beta = Where()([is_track, 0.9999, pred_beta])
 
-
+    predict_spectator_weights = False
     if predict_spectator_weights:
         pred_spectator_weights = Dense(1,
                 activation='sigmoid',
