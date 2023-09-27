@@ -2,9 +2,10 @@
 Run inference and plot clustering. See TODO comments for what you should change.
 '''
 import functools
+import numpy as np
 
 # TODO: change this to your training dir
-#IN_DIR = "/eos/user/m/mgarciam/trainings_karolina/cluster_coords_by_epoch"
+# IN_DIR = "/eos/user/m/mgarciam/trainings_karolina/cluster_coords_by_epoch"
 
 IN_DIR = "/eos/user/m/mgarciam/datasets_mlpf/models_trained/logs_10_15_allp_karolina/"
 
@@ -69,7 +70,7 @@ plotfrequency = 100
 
 LOSS_OPTIONS = {
     'energy_loss_weight': 0.,
-    'q_min': 5.,
+    'q_min': 3.,
     'use_average_cc_pos': 0.99,
     'classification_loss_weight':0., # to make it work0.5,
     'too_much_beta_scale': 0.0,
@@ -301,6 +302,8 @@ def gravnet_model(
 
     x = ScaledGooeyBatchNorm2(**BATCHNORM_OPTIONS)(x)
     # x = Concatenate()([x])
+    print(x)
+    print(create_outputs(x, n_ccoords=N_CLUSTER_SPACE_COORDINATES, fix_distance_scale=True))
 
     (
         pred_beta,
@@ -364,6 +367,7 @@ def gravnet_model(
         name="condensation",
         publish=publishpath,
     )([pred_ccoords, pred_beta, pre_selection["t_idx"], rs])
+    print(pred_beta, type(pred_beta))
     model_outputs = {
         "pred_beta": pred_beta,
         "pred_ccoords": pred_ccoords,
@@ -379,6 +383,7 @@ def gravnet_model(
             "row_splits"
         ],  # are these the selected ones or not?
         "no_noise_sel": np.arange(len(pred_beta)),
+	#'no_noise_sel': trans['sel_idx_up'],
         #'no_noise_rs': trans['rs_down'], #unclear what that actually means?
         # 'noise_backscatter': pre_selection['noise_backscatter'],
     }
@@ -393,31 +398,43 @@ PUBLISHPATH=None
 
 publishpath = PUBLISHPATH #this can be an ssh reachable path (be careful: needs tokens / keypairs)
 
-if not train.modelSet():
-    print("Here")
-    train.setModel(gravnet_model,
-                   td=train.train_data.dataclass(),
-                   publishpath= publishpath,
-                   debug_outdir=train.outputDir+'/intplots')
-
-    train.setCustomOptimizer(tf.keras.optimizers.Nadam(clipnorm=1., 
-                                                       #epsilon=1e-2
-                                                       ))
-    #
-    train.compileModel(learningrate=1e-4)
-    train.keras_model.summary()
+#if not train.modelSet():
+#    print("Here")
+#    train.setModel(gravnet_model,
+#                   td=train.train_data.dataclass(),
+#                   publishpath= publishpath,
+#                   debug_outdir=train.outputDir+'/intplots')#
+#
+#    train.setCustomOptimizer(tf.keras.optimizers.Nadam(clipnorm=1., 
+#                                                       #epsilon=1e-2
+#                                                       ))
+#    #
+#    train.compileModel(learningrate=1e-4)
+#    train.keras_model.summary()
     #wandb.watch(train.keras_model, log="all", log_freq=100)
 
 
 verbosity = 2
 
-num_events_to_plot = 10
+num_events_to_plot = 1
 plot_idx = []
 
+
 for file_id in ordered_ids:
+    print(file_id)
+    train.setModel(gravnet_model,
+                   td=train.train_data.dataclass(),
+                   publishpath= publishpath,
+                   debug_outdir=train.outputDir+'/intplots')
+
+    train.setCustomOptimizer(tf.keras.optimizers.Nadam(clipnorm=1.,
+                                                       #epsilon=1e-2
+                                                       ))
+    train.compileModel(learningrate=1e-4)
     train.keras_model.load_weights(train.outputDir + files[file_id])
     print("Loaded weights for", file_id, "from", train.outputDir + files[file_id])
     print("******", "file_id", file_id, "******")
+
     for i in range(num_events_to_plot):
         cb = []
         cb += [plotEventDuringTraining(
