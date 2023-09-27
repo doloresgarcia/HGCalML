@@ -431,6 +431,7 @@ def create_outputs(
     energy_factor=True,
     name_prefix="output_module",
     trainable=True,
+    set_track_betas_to_one=False
 ):
     """
 
