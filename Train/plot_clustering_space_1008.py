@@ -135,8 +135,258 @@ from callbacks import plotClusterSummary, plotEventDuringTraining
 from argparse import ArgumentParser
 from DeepJetCore.training.DeepJet_callbacks import simpleMetricsCallback
 
+def gravnet_model(
+    Inputs,
+    td,
+    debug_outdir=None,
+    publishpath=None,
+    plot_debug_every=record_frequency * plotfrequency,
+):
+    ############################################################################
+    ##################### Input processing, no need to change much here ########
+    ############################################################################
+
+    pre_selection = td.interpretAllModelInputs(Inputs, returndict=True)
+    # tf.print("INPUTS SHAPE", {key: Inputs[key].shape for key in Inputs})
+    # tf.print("PRE-SELECTION SHAPE", {key: Inputs[key].shape for key in pre_selection})
+    pre_selection = condition_input(pre_selection, no_scaling=True, no_prime=True)
+    # trans, pre_selection = tiny_pc_pool(
+    #    pre_selection,
+    #    record_metrics=True,
+    #    #trainable=True
+    #    )#train in one go.. what is up with the weight loading?
+
+    # just for info what's available
+
+    rs = pre_selection["row_splits"]
+    is_track = pre_selection["is_track"]
+
+    x = ScaledGooeyBatchNorm2(fluidity_decay=0.01)(
+        [pre_selection["features"], is_track]
+    )
+
+    x = ScaledGooeyBatchNorm2(fluidity_decay=0.01, invert_condition=True)([x, is_track])
+
+    x_in = Concatenate()([x, pre_selection["prime_coords"]])
+
+    x_in = Concatenate()([x_in, is_track, SphereActivation()(x_in)])
+    x_in = ScaledGooeyBatchNorm2(**BATCHNORM_OPTIONS)(x_in)
+    x_in = Dense(64, activation=DENSE_ACTIVATION)(x_in)
+    x = x_in
+    energy = pre_selection["rechit_energy"]
+    c_coords = pre_selection["prime_coords"]  # pre-clustered coordinates
+    c_coords = ScaledGooeyBatchNorm2(
+        fluidity_decay=0.5,  # can freeze almost immediately
+    )(c_coords)
+    t_idx = pre_selection["t_idx"]
+
+    c_coords = PlotCoordinates(
+        plot_every=plot_debug_every,
+        outdir=debug_outdir,
+        name="input_c_coords",
+        publish=publishpath,
+    )([c_coords, energy, t_idx, rs])
+
+    ############################################################################
+    ##################### now the actual model goes below ######################
+    ############################################################################
+
+    # extend coordinates already here if needed, starting point for gravnet
+
+    c_coords = extent_coords_if_needed(c_coords, x, N_GRAVNET)
+
+    allfeat = []
+
+    ## not needed, embedding already done in the pre-pooling
+    # x_track = Dense(64,
+    #        activation=DENSE_ACTIVATION,
+    #        kernel_regularizer=DENSE_REGULARIZER)(x)
+    # x_hit = Dense(64,
+    #        activation=DENSE_ACTIVATION,
+    #        kernel_regularizer=DENSE_REGULARIZER)(x)
+    # is_track_bool = tf.cast(is_track, tf.bool)
+    # x = tf.where(is_track_bool, x_track, x_hit)
+
+    for i in range(TOTAL_ITERATIONS):
+
+        # x_skip = x
+        # x,n = SphereActivation(return_norm=True)(x)
+
+        d_shape = x.shape[1] // 2
+
+        x = Dense(
+            d_shape, activation=DENSE_ACTIVATION, kernel_regularizer=DENSE_REGULARIZER
+        )(x)
+        # x = Dropout(1e-9)(x)
+        x = Dense(
+            d_shape, activation=DENSE_ACTIVATION, kernel_regularizer=DENSE_REGULARIZER
+        )(x)
+
+        # x = Add()([x,x_skip])
+
+        # x = Concatenate()([c_coords,x])
+        x = ScaledGooeyBatchNorm2(**BATCHNORM_OPTIONS)(x)
+
+        xgn, gncoords, gnnidx, gndist = RaggedGravNet(
+            n_neighbours=N_NEIGHBOURS[i],
+            n_dimensions=N_GRAVNET,
+            n_filters=d_shape,
+            n_propagate=d_shape * 2,
+            coord_initialiser_noise=None,  # 1e-3,
+            sumwnorm=True,
+        )([x, rs])
+
+        xgn = ScaledGooeyBatchNorm2(**BATCHNORM_OPTIONS)(xgn)
+
+        gndist = AverageDistanceRegularizer(strength=1e-2, record_metrics=True)(gndist)
+
+        gndist = LLRegulariseGravNetSpace(
+            scale=0.01,
+            print_loss=True,
+            # project = True
+        )([gndist, pre_selection["prime_coords"], gnnidx])
+
+        gncoords = PlotCoordinates(
+            plot_every=plot_debug_every,
+            outdir=debug_outdir,
+            name="gn_coords_" + str(i),
+            publish=publishpath,
+        )([gncoords, energy, t_idx, rs])
+        gncoords = StopGradient()(gncoords)
+
+        x = Concatenate()([gncoords, xgn, x])
+
+        x = Dense(
+            d_shape,
+            name="dense_past_mp_" + str(i),
+            activation=DENSE_ACTIVATION,
+            kernel_regularizer=DENSE_REGULARIZER,
+        )(x)
+        # x = Dropout(1e-9)(x)
+        x = Dense(
+            d_shape, activation=DENSE_ACTIVATION, kernel_regularizer=DENSE_REGULARIZER
+        )(x)
+
+        # x_e = EdgeConvStatic([64,64,64])([x,gnnidx])
+        # x = Concatenate()([x,EdgeConvStatic([64,64,64])([x_e,gnnidx])])
+
+        # x = Multi()([x,n]) #back to full space
+
+        x = ScaledGooeyBatchNorm2(**BATCHNORM_OPTIONS)(x)
+
+        # x = Add()([x,x_skip])
+
+        allfeat.append(x)
+
+        if len(allfeat) > 1:
+            x = Concatenate()(allfeat)
+        else:
+            x = allfeat[0]
+
+    # x = RaggedGlobalExchange()([x,rs])
+    # x = Concatenate()([x,SphereActivation()(x)])
+    x = Dense(64, name="Last_Dense_1", activation=DENSE_ACTIVATION)(x)
+    x = Dense(64, name="Last_Dense_2", activation=DENSE_ACTIVATION)(x)
+    # x = Dropout(1e-9)(x)
+    x = Dense(64, name="Last_Dense_3", activation=DENSE_ACTIVATION)(
+        x
+    )  # we want this to be not bounded
+
+    ###########################################################################
+    ########### the part below should remain almost unchanged #################
+    ########### of course with the exception of the OC loss   #################
+    ########### weights                                       #################
+    ###########################################################################
+
+    x = ScaledGooeyBatchNorm2(**BATCHNORM_OPTIONS)(x)
+    # x = Concatenate()([x])
+
+    (
+        pred_beta,
+        pred_ccoords,
+        pred_dist,
+        pred_energy_corr,
+        pred_energy_low_quantile,
+        pred_energy_high_quantile,
+        pred_pos,
+        pred_time,
+        pred_time_unc,
+        pred_id,
+    ) = create_outputs(
+        x, n_ccoords=N_CLUSTER_SPACE_COORDINATES, fix_distance_scale=True
+    )
+
+    # pred_ccoords = LLFillSpace(maxhits=2000, runevery=5, scale=0.01)([pred_ccoords, rs, t_idx])
+
+    # loss
+    pred_beta = LLExtendedObjectCondensation(
+        scale=1.0,
+        use_energy_weights=False,  # well distributed anyways
+        record_metrics=True,
+        print_loss=True,
+        name="ExtendedOCLoss",
+        **LOSS_OPTIONS
+    )(  # oc output and payload
+        [
+            pred_beta,
+            pred_ccoords,
+            pred_dist,
+            pred_energy_corr,
+            pred_energy_low_quantile,
+            pred_energy_high_quantile,
+            pred_pos,
+            pred_time,
+            pred_time_unc,
+            pred_id,
+        ]
+        + [energy]
+        +
+        # truth information
+        [
+            pre_selection["t_idx"],
+            pre_selection["t_energy"],
+            pre_selection["t_pos"],
+            pre_selection["t_time"],
+            pre_selection["t_pid"],
+            pre_selection["t_spectator_weight"],
+            pre_selection["t_fully_contained"],
+            pre_selection["t_rec_energy"],
+            pre_selection["t_is_unique"],
+            pre_selection["row_splits"],
+        ]
+    )
+
+    # fast feedback
+    pred_ccoords = PlotCoordinates(
+        plot_every=plot_debug_every,
+        outdir=debug_outdir,
+        name="condensation",
+        publish=publishpath,
+    )([pred_ccoords, pred_beta, pre_selection["t_idx"], rs])
+    model_outputs = {
+        "pred_beta": pred_beta,
+        "pred_ccoords": pred_ccoords,
+        "pred_energy_corr_factor": pred_energy_corr,
+        "pred_energy_low_quantile": pred_energy_low_quantile,
+        "pred_energy_high_quantile": pred_energy_high_quantile,
+        "pred_pos": pred_pos,
+        "pred_time": pred_time,
+        "pred_id": pred_id,
+        "pred_dist": pred_dist,
+        "rechit_energy": energy,
+        "row_splits": pre_selection[
+            "row_splits"
+        ],  # are these the selected ones or not?
+        #'no_noise_sel': trans['sel_idx_up'],
+        #'no_noise_rs': trans['rs_down'], #unclear what that actually means?
+        # 'noise_backscatter': pre_selection['noise_backscatter'],
+    }
+    # #tf.print("MODEL OUTPUTS SHAPE", {k: v.shape for k, v in model_outputs.items()})
+    return DictModel(inputs=Inputs, outputs=model_outputs)
 
 
+
+"""
 def gravnet_model(
     Inputs,
     td,
@@ -382,14 +632,14 @@ def gravnet_model(
         "row_splits": pre_selection[
             "row_splits"
         ],  # are these the selected ones or not?
-        "no_noise_sel": np.arange(len(pred_beta)),
+        #"no_noise_sel": np.arange(len(pred_beta)),
 	#'no_noise_sel': trans['sel_idx_up'],
         #'no_noise_rs': trans['rs_down'], #unclear what that actually means?
         # 'noise_backscatter': pre_selection['noise_backscatter'],
     }
     # #tf.print("MODEL OUTPUTS SHAPE", {k: v.shape for k, v in model_outputs.items()})
     return DictModel(inputs=Inputs, outputs=model_outputs)
-
+"""
 
 import training_base_hgcal
 train = training_base_hgcal.HGCalTraining()
@@ -431,6 +681,7 @@ for file_id in ordered_ids:
                                                        #epsilon=1e-2
                                                        ))
     train.compileModel(learningrate=1e-4)
+    train.keras_model.summary()
     train.keras_model.load_weights(train.outputDir + files[file_id])
     print("Loaded weights for", file_id, "from", train.outputDir + files[file_id])
     print("******", "file_id", file_id, "******")
