@@ -45,7 +45,7 @@ ordered_ids.sort(key=functools.cmp_to_key(cmp_func))
 BATCHNORM_OPTIONS = {
     'max_viscosity': 0.999999, #keep very batchnorm like
     'fluidity_decay': 0.01
-    }
+}
 
 
 # Configuration for training
