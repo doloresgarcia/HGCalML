@@ -23,7 +23,7 @@ from Layers import RaggedGravNet
 from Layers import PlotCoordinates
 from Layers import DistanceWeightedMessagePassing
 from Layers import LLFillSpace
-from Layers import LLExtendedObjectCondensation
+from Layers import LLExtendedObjectCondensation2
 from Layers import DictModel
 from Layers import RaggedGlobalExchange
 from Layers import SphereActivation
@@ -63,6 +63,8 @@ BATCHNORM_OPTIONS = config['BatchNormOptions']
 DENSE_ACTIVATION = config['DenseOptions']['activation']
 DENSE_REGULARIZER = tf.keras.regularizers.l2(config['DenseOptions']['kernel_regularizer_rate'])
 DROPOUT = config['DenseOptions']['dropout']
+NOISE_MODEL = '/mnt/home/pzehetner/ML4Reco/models/noisefilter_PU/model.h5'
+NOISE_MODEL = '/mnt/home/pzehetner/ML4Reco/models/noisefilter_noPU/model.h5'
 
 wandb_config = {
     "loss_implementation"           :   config['General']['oc_implementation'],
@@ -79,6 +81,7 @@ wandb_config = {
     "dense_activation"              :   config['DenseOptions']['activation'],
     "dense_kernel_reg"              :   config['DenseOptions']['kernel_regularizer_rate'] ,
     "dense_dropout"                 :   config['DenseOptions']['dropout'],
+    "noise_model"                   :   NOISE_MODEL,
 }
 
 for i in range(GRAVNET_ITERATIONS):
@@ -114,7 +117,11 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
     ###########################################################################
 
     orig_input = td.interpretAllModelInputs(Inputs)
-    pre_processed = condition_input(orig_input, no_scaling=True, no_prime=False)
+    pre_processed = noise_filter(
+        orig_input,
+        trainable=False,
+        pass_through=False)
+    pre_processed = condition_input(pre_processed, no_scaling=True, no_prime=False)
 
     prime_coords = pre_processed['prime_coords']
     is_track = pre_processed['is_track']
@@ -264,7 +271,7 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
     else:
         loss_implementation = ''
 
-    pred_beta = LLExtendedObjectCondensation(scale=1.,
+    pred_beta = LLExtendedObjectCondensation2(scale=1.,
                                              use_energy_weights=True,
                                              record_metrics=True,
                                              print_loss=True,
@@ -296,8 +303,8 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
         'pred_dist': pred_dist,
         'rechit_energy': energy,
         'row_splits': pre_processed['row_splits'],
-        # 'no_noise_sel': pre_processed['no_noise_sel'],
-        # 'no_noise_rs': pre_processed['no_noise_rs'],
+        'no_noise_sel': pre_processed['no_noise_sel'],
+        'no_noise_rs': pre_processed['no_noise_rs'],
         }
 
     return DictModel(inputs=Inputs, outputs=model_outputs)
@@ -319,6 +326,7 @@ if not train.modelSet():
     train.setCustomOptimizer(tf.keras.optimizers.Nadam(clipnorm=1.))
     train.compileModel(learningrate=1e-4)
     train.keras_model.summary()
+    apply_weights_from_path(NOISE_MODEL, train.keras_model)
 
 ###############################################################################
 ### Callbacks #################################################################

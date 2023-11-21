@@ -184,6 +184,8 @@ class NormaliseTruthIdxs(tf.keras.layers.Layer):
         return normalise_index(t_idx, rs, self.add_rs_offset)
 
 
+
+
 class LossLayerBase(LayerWithMetrics):
     """Base class for HGCalML loss layers.
 
@@ -349,6 +351,7 @@ class LLRegulariseGravNetSpace(LossLayerBase):
         if "project" in kwargs:
             self.project = kwargs["project"]
             del kwargs["project"]
+
         super(LLRegulariseGravNetSpace, self).__init__(**kwargs)
         print('INFO: LLRegulariseGravNetSpace: this is actually a regulariser: move to right file soon.')
 
@@ -1028,6 +1031,116 @@ class LLOCThresholds(LossLayerBase):
 
 
 
+class LLRegulariseGravNetSpace(LossLayerBase):
+    
+    def __init__(self, 
+                 project = False,
+                 **kwargs):
+        '''
+        Regularisation layer (not truth dependent)
+        Regularises the GravNet space to have similar distances than the physical space
+        
+        Inputs:
+        - GravNet Distances
+        - physical coordinates (prime_coords)
+        - neighbour indices
+        
+        Outputs:
+        - GravNet Distances (unchanged)
+        
+        Options:
+        - project: projects the physical inputs to a one-sphere (not useful when using HGCAL 'prime coordinates')
+        
+        '''
+        super(LLRegulariseGravNetSpace, self).__init__(**kwargs)
+        self.project = project
+        print('INFO: LLRegulariseGravNetSpace: this is actually a regulariser: move to right file soon.')
+        
+        
+    def get_config(self):
+        config={'project': self.project}
+        base_config = super(LLRegulariseGravNetSpace, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+        
+    def loss(self, inputs):
+        assert len(inputs) == 3
+        gndist, in_coords, nidx = inputs
+        
+        
+        if self.project:
+            in_coords = in_coords / tf.sqrt( tf.reduce_sum(in_coords**2, axis=1, keepdims=True) + 1e-6)
+        else:
+            # this is prime-coords, so x', y', z', where z is projected towards the beamspot
+            # so we can just remove it
+            in_coords = in_coords[:,:2]
+        
+        ncoords = SelectWithDefault(nidx, in_coords, -1e6)
+        dist = tf.reduce_sum( (in_coords[:,tf.newaxis,:] - ncoords)**2, axis=2 ) # V x K+1
+        
+        dist = tf.where(ncoords[:,:,0] < -1e5, 0., dist)#mask masked again
+        
+        dist = tf.sqrt(dist + 1e-6)
+        
+        dist = dist / (tf.reduce_mean(dist, axis=1, keepdims=True)+1e-4)
+        
+        gndist = tf.sqrt(gndist + 1e-6)
+        
+        gndist = gndist / (tf.reduce_mean(gndist, axis=1, keepdims=True)+1e-4)
+        
+        lossval = tf.reduce_mean((dist - gndist)**2)
+
+        return lossval    
+
+
+class LLSpectatorPenalty(LossLayerBase):
+    """
+    Regularizer to make sure that spectator weights stay reasonably low
+    per shower.
+    """
+    def __init__(self, **kwargs):
+        super(LLSpectatorPenalty, self).__init__(**kwargs)
+
+
+    def get_config(self):
+        base_config = super(LLSpectatorPenalty, self).get_config()
+        return base_config
+
+
+    @staticmethod
+    def _rs_loop(spectator_weights, truth_idx):
+        Msel, _, _ = CreateMidx(truth_idx, calc_m_not=False)
+        mask_k_m = SelectWithDefault(Msel, tf.zeros_like(spectator_weights)+1., 0.)         # K x V-obj x 1
+        spectators_k_m = SelectWithDefault(Msel, spectator_weights, 0.)   # K x V-obj x 1
+        spectators_k_m_squared = spectators_k_m**2
+        sum_k = tf.reduce_sum(spectators_k_m_squared, axis=1)
+        mean_k = sum_k / tf.reduce_sum(mask_k_m, axis=1)
+        mean = tf.reduce_mean(mean_k)
+        return mean
+
+
+    @staticmethod
+    def raw_loss(spectator_weights, truth_idx, rs):
+        loss = tf.zeros([], dtype='float32')
+        for i in range(len(rs)-1):
+            spectator_weights_rs = spectator_weights[rs[i]:rs[i+1]]
+            truth_idx_rs = truth_idx[rs[i]:rs[i+1]]
+            loss += LLSpectatorPenalty._rs_loop(spectator_weights_rs, truth_idx_rs)
+
+        loss /= tf.cast(rs.shape[0]-1,'float32')
+
+        return loss
+
+
+    def loss(self, inputs):
+        assert len(inputs) == 3
+        spectator_weights, truth_idx, rs = inputs
+        lossval = LLSpectatorPenalty.raw_loss(spectator_weights, truth_idx, rs)
+
+        return lossval
+
+
+        
+        
 class LLFillSpace(LossLayerBase):
     def __init__(self,
                  maxhits: int=1000,
@@ -2109,7 +2222,9 @@ class LLFullObjectCondensation(LossLayerBase):
             raise ValueError("huber_energy_scale>0 and alt_energy_loss exclude each other")
 
 
-        from object_condensation import Basic_OC_per_sample, PushPull_OC_per_sample, Hinge_OC_per_sample, Hinge_Manhatten_OC_per_sample, PreCond_OC_per_sample
+        from object_condensation import Basic_OC_per_sample, PushPull_OC_per_sample, PreCond_OC_per_sample
+        from object_condensation import Hinge_OC_per_sample_damped, Hinge_OC_per_sample, Hinge_Manhatten_OC_per_sample
+        from object_condensation import Hinge_OC_per_sample_learnable_qmin, Hinge_OC_per_sample_learnable_qmin_betascale_position
         impl = Basic_OC_per_sample
         if implementation == 'pushpull':
             impl = PushPull_OC_per_sample
@@ -2117,8 +2232,18 @@ class LLFullObjectCondensation(LossLayerBase):
             impl = PreCond_OC_per_sample
         if implementation == 'hinge':
             impl = Hinge_OC_per_sample
+        if implementation == 'hinge_full_grad':
+            # same as`hinge`
+            impl = Hinge_OC_per_sample
+        if implementation == 'hinge_damped':
+            # `hinge` but gradients for condensation points are maximally damped
+            impl = Hinge_OC_per_sample_damped
         if implementation == 'hinge_manhatten':
             impl = Hinge_Manhatten_OC_per_sample
+        if implementation == 'hinge_qmin':
+            impl = Hinge_OC_per_sample_learnable_qmin
+        if implementation == 'hinge_qmin_betascale_pos':
+            impl = Hinge_OC_per_sample_learnable_qmin_betascale_position
         self.implementation = implementation
 
 
@@ -2478,7 +2603,7 @@ class LLFullObjectCondensation(LossLayerBase):
             #                               div_repulsion = self.div_repulsion,
             #                               dynamic_payload_scaling_onset=self.dynamic_payload_scaling_onset
             #                               )
-            att, rep, noise, min_b, payload, exceed_beta = self.oc_loss_object(
+            att, rep, noise, min_b, payload, exceed_beta, containment, contamination = self.oc_loss_object(
                 beta=pred_beta,
                 x=pred_ccoords,
                 d=pred_distscale,
@@ -2486,9 +2611,15 @@ class LLFullObjectCondensation(LossLayerBase):
                 truth_idx=t_idx,
                 object_weight=energy_weights,
                 is_spectator_weight=is_spectator,
-                rs=rowsplits)
+                rs=rowsplits,
+                energies = rechit_energy)
 
         self.add_prompt_metric(att+rep,self.name+'_dynamic_payload_scaling')
+
+        if containment is not None:
+            self.add_prompt_metric(containment,self.name+'_containment')
+            self.add_prompt_metric(contamination,self.name+'_contamination')
+
 
         att *= self.potential_scaling
         rep *= self.potential_scaling * self.repulsion_scaling
@@ -2746,6 +2877,112 @@ class LLExtendedObjectCondensation(LLFullObjectCondensation):
         # Uncertainty 'sigma' must minimize this term:
         # ln(2*pi*sigma^2) + (E_true - E-pred)^2/sigma^2
         matching_loss = (pred_uncertainty_low - pred_uncertainty_high)**2
+        # prediction_loss = tf.math.divide_no_nan((t_energy - epred)**2, sigma**2)
+        prediction_loss = tf.math.divide_no_nan((t_energy - epred), sigma)
+        prediction_loss = huber(prediction_loss, d=2)
+
+        uncertainty_loss = tf.math.log(sigma**2)
+
+        matching_loss = tf.debugging.check_numerics(matching_loss, "matching_loss")
+        prediction_loss = tf.debugging.check_numerics(prediction_loss, "matching_loss")
+        uncertainty_loss = tf.debugging.check_numerics(uncertainty_loss, "matching_loss")
+        prediction_loss = tf.clip_by_value(prediction_loss, 0, 10)
+        uncertainty_loss = tf.clip_by_value(uncertainty_loss, 0, 10)
+
+        if return_concat:
+            return tf.concat([prediction_loss, matching_loss + uncertainty_loss], axis=-1)
+        else:
+            return prediction_loss, uncertainty_loss + matching_loss
+
+
+
+class LLExtendedObjectCondensation2(LLFullObjectCondensation):
+    '''
+    Same as `LLFullObjectCondensation` but adds:
+    * different version of particle ID
+    * Energy uncertainty
+    '''
+
+
+    def __init__(self, *args, **kwargs):
+        super(LLExtendedObjectCondensation2, self).__init__(*args, **kwargs)
+
+
+    def calc_classification_loss(self, orig_t_pid, pred_id, t_is_unique=None, hasunique=None):
+        """
+        Truth PID is not yet one-hot encoded
+        Encoding:
+            0:  Muon
+            1:  Electron
+            2:  Photon
+            3:  Charged Hadron
+            4:  Neutral Hadron
+            5:  Ambiguous
+        """
+        if self.classification_loss_weight <= 0:
+            return tf.reduce_mean(pred_id,axis=1, keepdims=True)
+
+        charged_hadronic_conditions = [
+                tf.abs(orig_t_pid) == 211,  # Pions
+                tf.abs(orig_t_pid) == 312,  # Kaons
+                tf.abs(orig_t_pid) == 2212, # Protons
+                ]
+        neutral_hadronic_conditions = [
+                tf.abs(orig_t_pid) == 130,  # Klong
+                tf.abs(orig_t_pid) == 2112, # Neutrons
+                ]
+        charged_hadronic_true = tf.reduce_any(charged_hadronic_conditions, axis=0)
+        neutral_hadronic_true = tf.reduce_any(neutral_hadronic_conditions, axis=0)
+
+        truth_pid_tmp = tf.zeros_like(orig_t_pid) - 1 # Initialize with -1
+        truth_pid_tmp = tf.where(tf.abs(orig_t_pid) == 13, 0, truth_pid_tmp)    # Muons
+        truth_pid_tmp = tf.where(tf.abs(orig_t_pid) == 11, 1, truth_pid_tmp)    # Electrons
+        truth_pid_tmp = tf.where(tf.abs(orig_t_pid) == 22, 2, truth_pid_tmp)    # Photons
+        truth_pid_tmp = tf.where(charged_hadronic_true, 3, truth_pid_tmp)       # Charged Had.
+        truth_pid_tmp = tf.where(neutral_hadronic_true, 4, truth_pid_tmp)       # Neutral Had.
+        truth_pid_tmp = tf.where(truth_pid_tmp == -1, 5, truth_pid_tmp)         # Catch rest
+        truth_pid_tmp = tf.cast(truth_pid_tmp, tf.int32)
+
+        truth_pid_onehot = tf.one_hot(truth_pid_tmp, depth=6)
+        truth_pid_onehot = tf.reshape(truth_pid_onehot, (-1, 6))
+
+        pred_id = tf.clip_by_value(pred_id, 1e-9, 1. - 1e-9)
+        classloss = tf.keras.losses.categorical_crossentropy(truth_pid_onehot, pred_id)
+
+        # For ambiguous: set classloss to zero
+        # classloss = tf.where(tf.reshape(truth_pid_tmp, classloss.shape) == -1, 0, classloss)
+        # Catch cases in which `t_pid` was not defined as expected
+        # classloss = tf.where(tf.reduce_sum(orig_t_pid,axis=1)>1. , 0., classloss)
+        # classloss = tf.where(tf.reduce_sum(orig_t_pid,axis=1)<1.-1e-3 , 0., classloss)
+
+        classloss = tf.debugging.check_numerics(classloss, "classloss")
+
+        return classloss[...,tf.newaxis]
+
+
+    def calc_energy_correction_factor_loss(self,
+            t_energy, t_dep_energies,
+            pred_energy, pred_uncertainty_low, pred_uncertainty_high,
+            return_concat=False):
+        """
+        This loss uses a Bayesian approach to predict an energy uncertainty.
+        * t_energy              -> Truth energy of shower
+        * t_dep_energies        -> Sum of deposited energy IF clustered perfectly
+        * pred_energy           -> Correction factor applied to energy
+        * pred_uncertainty_low  -> predicted uncertainty
+        * pred_uncertainty_high -> predicted uncertainty (should be equal to ...low)
+        """
+        t_energy = tf.clip_by_value(t_energy,0.,1e12)
+        t_dep_energies = tf.clip_by_value(t_dep_energies,0.,1e12)
+        t_dep_energies = tf.where(t_dep_energies / t_energy > 2.0, 2.0 * t_energy, t_dep_energies)
+        t_dep_energies = tf.where(t_dep_energies / t_energy < 0.5, 0.5 * t_energy, t_dep_energies)
+
+        epred = pred_energy * t_dep_energies
+        sigma = pred_uncertainty_high * t_dep_energies + 1.0
+
+        # Uncertainty 'sigma' must minimize this term:
+        # ln(2*pi*sigma^2) + (E_true - E-pred)^2/sigma^2
+        matching_loss = (pred_uncertainty_low)**2
         # prediction_loss = tf.math.divide_no_nan((t_energy - epred)**2, sigma**2)
         prediction_loss = tf.math.divide_no_nan((t_energy - epred), sigma)
         prediction_loss = huber(prediction_loss, d=2)

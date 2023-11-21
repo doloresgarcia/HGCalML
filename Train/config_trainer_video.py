@@ -23,7 +23,7 @@ from Layers import RaggedGravNet
 from Layers import PlotCoordinates
 from Layers import DistanceWeightedMessagePassing
 from Layers import LLFillSpace
-from Layers import LLExtendedObjectCondensation
+from Layers import LLExtendedObjectCondensation2
 from Layers import DictModel
 from Layers import RaggedGlobalExchange
 from Layers import SphereActivation
@@ -40,6 +40,7 @@ from noise_filter import noise_filter
 from callbacks import plotClusteringDuringTraining
 from callbacks import plotClusterSummary
 from callbacks import NanSweeper, DebugPlotRunner
+from callbacks import saveOften
 
 
 ####################################################################################################
@@ -150,7 +151,7 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
     c_coords = extent_coords_if_needed(prime_coords, x, N_CLUSTER_SPACE_COORDINATES)
 
     x = Concatenate()([x, c_coords, is_track])
-    x = Dense(64, name='dense_pre_loop', activation=DENSE_ACTIVATION)(x) 
+    x = Dense(64, name='dense_pre_loop', activation=DENSE_ACTIVATION)(x)
 
     allfeat = []
     print("Available keys: ", pre_processed.keys())
@@ -174,7 +175,7 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
         x_pre = x
 
         xgn, gncoords, gnnidx, gndist = RaggedGravNet(
-                name = f"RSU_gravnet_{i}", # 76929, 42625, 42625 
+                name = f"RSU_gravnet_{i}", # 76929, 42625, 42625
             n_neighbours=config['General']['gravnet'][i]['n'],
             n_dimensions=N_GRAVNET_SPACE_COORDINATES,
             n_filters=d_shape,
@@ -261,10 +262,14 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
 
     if config['General']['oc_implementation'] == 'hinge':
         loss_implementation = 'hinge'
+    elif config['General']['oc_implementation'] == 'hinge_qmin':
+        loss_implementation = 'hinge_qmin'
+    elif config['General']['oc_implementation'] == 'hinge_qmin_betascale_pos':
+        loss_implementation = 'hinge_qmin_betascale_pos'
     else:
         loss_implementation = ''
 
-    pred_beta = LLExtendedObjectCondensation(scale=1.,
+    pred_beta = LLExtendedObjectCondensation2(scale=1.,
                                              use_energy_weights=True,
                                              record_metrics=True,
                                              print_loss=True,
@@ -389,6 +394,15 @@ cb += [
     ]
 
 cb += [wandbCallback()]
+
+cb += [
+    saveOften(
+        outputDir=train.outputDir,
+        frequencies=[1, 5, 10],
+        cutoffs = [100, 600],
+        )
+    ]
+
 
 ###############################################################################
 ### Actual Training ###########################################################

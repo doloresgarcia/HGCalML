@@ -23,7 +23,7 @@ from Layers import RaggedGravNet
 from Layers import PlotCoordinates
 from Layers import DistanceWeightedMessagePassing
 from Layers import LLFillSpace
-from Layers import LLExtendedObjectCondensation
+from Layers import LLExtendedObjectCondensation2
 from Layers import DictModel
 from Layers import RaggedGlobalExchange
 from Layers import SphereActivation
@@ -255,7 +255,12 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
     pred_beta, pred_ccoords, pred_dist, \
         pred_energy_corr, pred_energy_low_quantile, pred_energy_high_quantile, \
         pred_pos, pred_time, pred_time_unc, pred_id = \
-        create_outputs(x, n_ccoords=N_CLUSTER_SPACE_COORDINATES, fix_distance_scale=True)
+        create_outputs(
+                x,
+                n_ccoords=N_CLUSTER_SPACE_COORDINATES,
+                fix_distance_scale=True,
+                is_track=is_track,
+                set_track_betas_to_one=True)
 
     # pred_ccoords = LLFillSpace(maxhits=2000, runevery=5, scale=0.01)([pred_ccoords, rs, t_idx])
 
@@ -264,7 +269,7 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
     else:
         loss_implementation = ''
 
-    pred_beta = LLExtendedObjectCondensation(scale=1.,
+    pred_beta = LLExtendedObjectCondensation2(scale=1.,
                                              use_energy_weights=True,
                                              record_metrics=True,
                                              print_loss=True,

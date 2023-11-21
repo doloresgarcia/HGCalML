@@ -92,11 +92,9 @@ for i in range(len(config['Training'])):
         wandb_config[f"train_{i}+_fluidity_decay"] = 0.1
 
 wandb.init(
-    project="Connecting-The-Dots",
+    project="August_test",
     config=wandb_config,
 )
-wandb.save(sys.argv[0]) # Save python file
-wandb.save(sys.argv[1]) # Save config file
 
 
 ###############################################################################

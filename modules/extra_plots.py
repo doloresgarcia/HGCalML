@@ -1,5 +1,6 @@
 # Plotting tools used when analysing model predictions
 import pdb
+import os
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -159,6 +160,38 @@ def within_uncertainty(df, bins=None, binwidth=10.):
     return fig
 
 
+def precise_resolution(df):
+    """
+    This will only consider truth energies close to multiples of 10 GeV 
+    To use this effectively use an appropriate data set that containes enough
+    showers within += 0.1 GeV of these values. 
+    """
+
+    x = np.arange(10, 210, 10)
+    e_true = df['truthHitAssignedEnergies']
+
+    """
+    def within_uncertainty(df, bins=None, binwidth=10.):
+        if bins is None:
+            binmax = df['truthHitAssignedEnergies'].max()
+            bins = calc_energy_bins(binmax, binwidth)
+
+        within_1sigma, within_2sigma, within_3sigma = calc_within_uncertainty(df, bins)
+        mean, std = bin_uncertainty(df, bins)
+
+        fig, ax = plt.subplots(nrows=2, figsize=(20, 10))
+        x = (bins[1:] + bins[:-1]) / 2
+        xerr = (bins[1:] - bins[:-1]) / 2
+        ax[0].errorbar(x, within_1sigma, xerr=xerr, fmt='o', label='within 1 sigma')
+        ax[0].errorbar(x, within_2sigma, xerr=xerr, fmt='o', label='within 2 sigma')
+        ax[0].errorbar(x, within_3sigma, xerr=xerr, fmt='o', label='within 3 sigma')
+        ax[1].errorbar(x, mean, xerr=xerr, yerr=std, fmt='o', label='uncertainty')
+        ax[0].legend()
+        ax[1].legend()
+    """
+
+
+
 def energy_resolution(df, bins=None, binwidth=10., addfit=False):
     if bins is None:
         binmax = df['truthHitAssignedEnergies'].max()
@@ -289,7 +322,7 @@ def energy_resolution(df, bins=None, binwidth=10., addfit=False):
     return fig
 
 
-def efficiency_plot(df, bins=None, binwidth=10):
+def efficiency_plot(df, bins=None, binwidth=10, return_summary=False):
     if bins is None:
         binmax = df['truthHitAssignedEnergies'].max()
         bins = calc_energy_bins(binmax, binwidth)
@@ -346,7 +379,21 @@ def efficiency_plot(df, bins=None, binwidth=10):
     # make the legend's background transparent and position it precisely
 
     legend = ax1.legend(handles, labels, loc=(0.8, 0.6), fontsize=20, framealpha=0.8)
-    return fig
+
+    summary = {
+            "energy": x_pos,
+            "energy_error": x_err,
+            "efficiency": y_eff,
+            "efficiency_error": yerr_eff,
+            "fake_rate": y_fake,
+            "fake_rate_error": yerr_fake,
+            "benchmark": np.sum(y_eff),
+            }
+
+    if return_summary:
+        return fig, summary
+    else:
+        return fig
 
 
 def calc_energy_bins(binmax, binwidth):
@@ -403,7 +450,7 @@ def dictlist_to_dataframe(dictlist, masks=None, add_event_id=True):
     for i in range(len(dictlist)):
         df = pd.DataFrame()
         for key, value in dictlist[i].items():
-            print(key)
+            # print(key)
             if key in ['row_splits', 'recHitXY']:
                 continue
             if len(value.shape) == 1:
@@ -487,7 +534,7 @@ def prediction_overview(prediction_dictlist):
     fig, ax = plt.subplots(nrows=7, ncols=3, figsize=(40, 50))
     ax = ax.flatten()
     skip = ['row_splits']
-    print(prediction.keys())
+    # print(prediction.keys())
     for i, key in enumerate(prediction.keys()):
         if key in skip:
             continue
@@ -522,6 +569,33 @@ def noise_performance(noise_df):
     fig.subplots_adjust(bottom=0.3)
     return fig
 
+MAP_DICT = {
+    0: 5,       # Whatever
+    13: 0,      # Muon
+    -13: 0,
+    11: 1,      # Electron
+    -11: 1,
+    22: 2,      # Photon
+    211: 3,     # Charged Pion
+    -211: 3,
+    # 312: 3,
+    # -312: 3,
+    321: 3,     # Charged Kaon
+    -321: 3,
+    2212: 3,    # Proton
+    -2212: 3,
+    3312: 3,    # Xi
+    -3312: 3,
+    130: 4,     # Klong
+    -130: 4,
+    310: 4,     # Kshort
+    -310: 4,
+    2112: 4,    # Neutron
+    -2112: 4,
+    3322: 4,    # Xi
+    -3322: 4,
+}
+
 
 def map_pid_to_classes(truth_pids):
     """
@@ -529,24 +603,108 @@ def map_pid_to_classes(truth_pids):
     1.  Electron
     2.  Photon
     3.  Charged Hadron
+        pion (211), kaon (321), proton (2212)
+        Xi (3312)
     4.  Neutral Hadron
+        klong (130), kshort (310), neutron (2112),
+        Xi (3322)
     5.  Ambiguous
     """
-    map_dict = {
-        13: 0,
-        -13: 0,
-        11: 1,
-        -11: 1,
-        22: 2,
-        211: 3,
-        -211: 3,
-    }
 
-    mapped = truth_pids.map(map_dict)
+    mapped = truth_pids.map(MAP_DICT)
     return mapped
 
 
-def classification_plot(showers_df):
+def classification_hitbased(truth, prediction, weighted=False, normalize=None):
+    """
+    Confusion matrix, but hit-based instead of shower-based
+
+    Input: 
+        truth       -> Dictionary with entry truthHitAssignedPIDs
+        prediction  -> Dictionary with entry pred_id
+    """
+    title = None
+    if normalize is None:
+        title = "Full counts"
+    elif normalize == 'true':
+        title = "Normalized to true class"
+    elif normalize == 'pred':
+        title = "Normalized to predicted class"
+    elif normalize == 'all':
+        title = "normalized to all entries"
+
+    weights = None
+    if weighted:
+        weights = prediction['pred_beta'][:,0]
+    else:
+        weights = np.ones_like(prediction['pred_beta'][:,0])
+
+    # truth_class = map_pid_to_classes(truth['truthHitAssignedPIDs'])
+    truth_class = []
+    # map_dict = {13: 0, -13: 0, 11: 1, -11: 1, 22: 2, 211: 3, -211: 3,
+            # 321: 3, -321: 3, 2212: 3, -2212: 3, 130: 4, -2112: 4, 2112: 4, 0:5}
+    for t in truth['truthHitAssignedPIDs']:
+        t = int(t)
+        truth_class.append(MAP_DICT[t])
+    pred_class = np.argmax(prediction['pred_id'], axis=-1)
+
+    cm = confusion_matrix(
+            truth_class, pred_class,
+            sample_weight = weights,
+            normalize=normalize, labels=[0,1,2,3,4,5]
+            )
+    classes = [
+        "Muon",
+        "Electron",
+        "Photon",
+        "Charged\nHadron",
+        "Neutral\nHadron",
+        "Ambiguous",
+    ]
+
+    # plot confusion matrix
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    xticklabels = ["Muon", "Electron", "Photon", "Charged\nHadron", "Neutral\nHadron", "Ambiguous"]
+    yticklabels = xticklabels
+    fmt = 'g'
+    ax = sns.heatmap(
+            cm, ax=ax,
+            annot=True, fmt=fmt, cbar=False,
+            xticklabels=xticklabels, yticklabels=yticklabels,
+            annot_kws = {"size": 15}, cmap='inferno'
+            ) 
+    ax.set_xlabel('Predicted Class', fontsize=30)
+    ax.set_ylabel('True Class', fontsize=30)
+    ax.set_title(title, fontsize=20)
+
+    for item in ax.get_xticklabels():
+        item.set_fontsize(15)
+    for item in ax.get_yticklabels():
+        item.set_fontsize(15)
+    fig.suptitle("Confusion Matrix", fontsize=30)
+    fig.tight_layout()
+
+
+    return fig
+
+
+
+
+
+def classification_plot(showers_df, normalize=None):
+    """
+    Function that given a showers dataframe creates a confusion matrix
+    for all matched showers
+
+    Inputs: 
+        - showers_df    -> Dataframe from showers matcher
+        - normalize     -> Normalization for annotations in the matrix
+            - None      -> Use counts
+            - 'true'    -> normalize to true classes
+            - 'pred'    -> normalize to predicted classes
+            - 'all'     -> normalize to all entries
+    """
     has_pred = np.logical_not(showers_df.pred_pos.isna())
     has_truth = np.logical_not(showers_df.truth_mean_x.isna())
     matched = showers_df[np.logical_and(has_pred, has_truth)]
@@ -554,27 +712,57 @@ def classification_plot(showers_df):
     matched_predPID = matched.pred_id
     mapped_truthClasses = map_pid_to_classes(matched_truthPID)
 
-    confusion_matrix(mapped_truthClasses, matched_predPID, labels=[0,1,2,3,4,5])
+    cm = confusion_matrix(
+            mapped_truthClasses, matched_predPID,
+            normalize=normalize, labels=[0,1,2,3,4,5]
+            )
+
+    title = None
+    if normalize is None:
+        title = "Full counts"
+        fmt = 'g'
+    elif normalize == 'true':
+        title = "Normalized to true class"
+        fmt = '.2%'
+    elif normalize == 'pred':
+        title = "Normalized to predicted class"
+        fmt = '.2%'
+    elif normalize == 'all':
+        title = "normalized to all entries"
+        fmt = '.2%'
 
     classes = [
         "Muon",
         "Electron",
         "Photon",
-        "Charged Hadron",
-        "Neutral Hadron",
+        "Charged\nHadron",
+        "Neutral\nHadron",
         "Ambiguous",
     ]
 
-    df_cm = pd.DataFrame(
-        confusion_matrix(mapped_truthClasses, matched_predPID, labels=[0,1,2,3,4,5], normalize=None),
-        index = classes,
-        columns = classes)
+    # plot confusion matrix
 
-    fig = plt.figure(figsize = (10,7))
-    sns.heatmap(df_cm, annot=True)
-    plt.ylabel('True label', fontsize=20)
-    plt.xlabel(r'Predicted label', fontsize=20)
-    plt.show()
+    fig, ax = plt.subplots(figsize=(10, 10))
+    xticklabels = ["Muon", "Electron", "Photon", "Charged\nHadron", "Neutral\nHadron", "Ambiguous"]
+    yticklabels = xticklabels
+    fmt = 'g'
+    ax = sns.heatmap(
+            cm, ax=ax,
+            annot=True, fmt=fmt, cbar=False,
+            xticklabels=xticklabels, yticklabels=yticklabels,
+            annot_kws = {"size": 15}, cmap='inferno'
+            ) 
+    ax.set_xlabel('Predicted Class', fontsize=30)
+    ax.set_ylabel('True Class', fontsize=30)
+    ax.set_title(title, fontsize=20)
+
+    for item in ax.get_xticklabels():
+        item.set_fontsize(15)
+    for item in ax.get_yticklabels():
+        item.set_fontsize(15)
+    fig.suptitle("Confusion Matrix", fontsize=30)
+    fig.tight_layout()
+
 
     return fig
 
@@ -588,3 +776,202 @@ def plot_high_low_difference(prediction):
     ax.hist(distance, bins=100)
     ax.set_title("Difference between high and low quantile", fontsize=20)
     return fig
+
+
+def get_energy_summary(path, prefix=''):
+    """
+    Given a path to a pickled analysis file which includes the showers_dataframe
+    this function returns a pandas dataframe that includes response and resolution
+    at different energies for the raw and corrected energy predictions, both for
+    hits and tracks (if available).
+    """
+    assert os.path.exists(path)
+    with gzip.open(path, "rb") as file:
+        df = pickle.load(file)['showers_dataframe']
+    df_matched = df[np.logical_and(
+        ~np.isnan(df['pred_energy']),
+        ~np.isnan(df['t_rec_energy']))]
+    true_energies = df_matched.truthHitAssignedEnergies
+    energy_track_raw = df_matched.pred_energy_tracks_raw
+    energy_track_cor = df_matched.pred_energy_tracks
+    energy_hits_raw = df_matched.pred_energy_hits_raw
+    energy_hits_cor = df_matched.pred_energy_hits
+
+    centers = np.arange(10, 210, 10)
+    summary = {
+        prefix + "hits_raw_response": [],
+        prefix + "hits_raw_response_filtered": [],
+        prefix + "hits_raw_resolution": [],
+        prefix + "hits_raw_resolution_filtered": [],
+        prefix + "hits_cor_response": [],
+        prefix + "hits_cor_response_filtered": [],
+        prefix + "hits_cor_resolution": [],
+        prefix + "hits_cor_resolution_filtered": [],
+        prefix + "tracks_raw_response": [],
+        prefix + "tracks_raw_response_filtered": [],
+        prefix + "tracks_raw_resolution": [],
+        prefix + "tracks_raw_resolution_filtered": [],
+        prefix + "tracks_cor_response": [],
+        prefix + "tracks_cor_response_filtered": [],
+        prefix + "tracks_cor_resolution": [],
+        prefix + "tracks_cor_resolution_filtered": [],
+    }
+    for i, center in enumerate(centers):
+        mask = np.logical_and(
+            center - 0.1 < true_energies,
+            true_energies < center + 0.1)
+        predictions_hits_raw = energy_hits_raw[mask]
+        predictions_hits_cor = energy_hits_cor[mask]
+        predictions_tracks_raw = energy_track_raw[mask]
+        predictions_tracks_cor = energy_track_cor[mask]
+        mask_filter = predictions_hits_raw > 0.2 * center
+        mask_filter_tracks = predictions_tracks_raw > 0.2 * center
+
+        summary[prefix + 'hits_raw_response'].append(
+            np.mean(predictions_hits_raw/true_energies[mask]))
+        summary[prefix + 'hits_raw_resolution'].append(
+            np.std(predictions_hits_raw)/center)
+        summary[prefix + 'hits_raw_response_filtered'].append(
+            np.mean(predictions_hits_raw[mask_filter]/true_energies[mask][mask_filter]))
+        summary[prefix + 'hits_raw_resolution_filtered'].append(
+            np.std(predictions_hits_raw[mask_filter])/center)
+
+        summary[prefix + 'hits_cor_response'].append(
+            np.mean(predictions_hits_cor/true_energies[mask]))
+        summary[prefix + 'hits_cor_resolution'].append(
+            np.std(predictions_hits_cor)/center)
+        summary[prefix + 'hits_cor_response_filtered'].append(
+            np.mean(predictions_hits_cor[mask_filter]/true_energies[mask][mask_filter]))
+        summary[prefix + 'hits_cor_resolution_filtered'].append(
+            np.std(predictions_hits_cor[mask_filter])/center)
+
+        summary[prefix + 'tracks_raw_response'].append(
+            np.mean(predictions_tracks_raw/true_energies[mask]))
+        summary[prefix + 'tracks_raw_resolution'].append(
+            np.std(predictions_tracks_raw)/center)
+        summary[prefix + 'tracks_raw_response_filtered'].append(
+            np.mean(predictions_tracks_raw[mask_filter_tracks]/
+                    true_energies[mask][mask_filter_tracks]))
+        summary[prefix + 'tracks_raw_resolution_filtered'].append(
+            np.std(predictions_tracks_raw[mask_filter_tracks])/center)
+        
+        summary[prefix + 'tracks_cor_response'].append(
+            np.mean(predictions_tracks_cor/true_energies[mask]))
+        summary[prefix + 'tracks_cor_resolution'].append(
+            np.std(predictions_tracks_cor)/center)
+        summary[prefix + 'tracks_cor_response_filtered'].append(
+            np.mean(predictions_tracks_cor[mask_filter_tracks]/
+                    true_energies[mask][mask_filter_tracks]))
+        summary[prefix + 'tracks_cor_resolution_filtered'].append(
+            np.std(predictions_tracks_cor[mask_filter_tracks])/center)
+
+    return pd.DataFrame(summary, index=centers)
+
+
+def plot_energy_summary(summary, prefix, title_prefix='',
+                 hits=True, tracks=True,
+                 raw=True, corrected=True,
+                 unfiltered=False, filtered=True):
+
+    centers = np.arange(10, 210, 10)
+
+    fig, ax = plt.subplots(nrows=2, ncols=1, figsize=(20, 20))
+    fig.suptitle(title_prefix + " - Energy Response and Resolution", fontsize=40)
+    ax[0].axhline(1.0, color='black', linestyle='--')
+    if hits:
+        if unfiltered:
+            if raw:
+                ax[0].scatter(centers, summary[prefix+'hits_raw_response'],
+                    marker=r'$\diamondsuit$', sizes=500*np.ones_like(centers),
+                    label="hits - raw", color='blue')
+            if corrected:
+                ax[0].scatter(centers, summary[prefix+'hits_cor_response'],
+                    marker=r'$\diamondsuit$', sizes=500*np.ones_like(centers),
+                    label="hits - corrected", color='green')
+        if filtered:
+            if raw:
+                ax[0].scatter(centers, summary[prefix+'hits_raw_response_filtered'],
+                    marker=r'$\bigtriangleup$', sizes=500*np.ones_like(centers),
+                    label="hits - raw - filtered", color='blue')
+            if corrected:
+                ax[0].scatter(centers, summary[prefix+'hits_cor_response_filtered'], 
+                    marker=r'$\bigtriangleup$', sizes=500*np.ones_like(centers),
+                    label="hits - corrected - filtered", color='green')
+
+    if tracks:
+        if unfiltered:
+            if raw:
+                ax[0].scatter(centers, summary[prefix+'tracks_raw_response'],
+                    marker=r'$\circ$', sizes=500*np.ones_like(centers),
+                    label="tracks - raw", color='blue')
+            if corrected:
+                ax[0].scatter(centers, summary[prefix+'tracks_cor_response'],
+                    marker=r'$\circ$', sizes=500*np.ones_like(centers),
+                    label="tracks - corrected", color='green')
+        if filtered:
+            if raw:
+                ax[0].scatter(centers, summary[prefix+'tracks_raw_response_filtered'],
+                    marker=r'$\triangledown$', sizes=500*np.ones_like(centers),
+                    label="tracks - raw - filtered", color='blue')
+            if corrected:
+                ax[0].scatter(centers, summary[prefix+'tracks_cor_response_filtered'],
+                    marker=r'$\triangledown$', sizes=500*np.ones_like(centers),
+                    label="tracks - corrected - filtered", color='green')
+
+    ax[0].grid()
+    ax[0].legend(fontsize=20)
+    ax[0].tick_params(axis='both', which='major', labelsize=20)
+    ax[0].set_xticks(np.arange(0, 210, 20))
+    ax[0].set_ylabel("Predicted / True (mean)", fontsize=30)
+
+    if hits:
+        if unfiltered:
+            if raw:
+                ax[1].scatter(centers, summary[prefix+'hits_raw_resolution'],
+                    marker=r'$\diamondsuit$', sizes=np.ones_like(centers)*500,
+                    label="hits - raw", color='blue')
+            if corrected:
+                ax[1].scatter(centers, summary[prefix+'hits_cor_resolution'],
+                    marker=r'$\diamondsuit$', sizes=np.ones_like(centers)*500,
+                    label="hits - corrected", color='green')
+        if filtered:
+            if raw:
+                ax[1].scatter(centers, summary[prefix+'hits_raw_resolution_filtered'],
+                    marker=r'$\bigtriangleup$', sizes=np.ones_like(centers)*500,
+                    label="hits - raw - filtered", color='blue')
+            if corrected:
+                ax[1].scatter(centers, summary[prefix+'hits_cor_resolution_filtered'],
+                    marker=r'$\bigtriangleup$', sizes=np.ones_like(centers)*500,
+                    label="hits - corrected - filtered", color='green')
+
+    if tracks:
+        if unfiltered:
+            if raw:
+                ax[1].scatter(centers, summary[prefix+'tracks_raw_resolution'],
+                    marker=r'$\circ$', sizes=np.ones_like(centers)*500,
+                    label="tracks - raw", color='blue')
+            if corrected:
+                ax[1].scatter(centers, summary[prefix+'tracks_cor_resolution'],
+                    marker=r'$\circ$', sizes=np.ones_like(centers)*500,
+                    label="tracks - corrected", color='green')
+        if filtered:
+            if raw:
+                ax[1].scatter(centers, summary[prefix+'tracks_raw_resolution_filtered'],
+                    marker=r'$\triangledown$', sizes=np.ones_like(centers)*500,
+                    label="tracks - raw - filtered", color='blue')
+            if corrected:
+                ax[1].scatter(centers, summary[prefix+'tracks_cor_resolution_filtered'],
+                    marker=r'$\triangledown$', sizes=np.ones_like(centers)*500,
+                    label="tracks - corrected - filtered", color='green')
+
+    ax[1].grid()
+    ax[1].legend(fontsize=20)
+    ax[1].tick_params(axis='both', which='major', labelsize=20)
+    ax[1].set_xticks(np.arange(0, 210, 20))
+    ax[1].set_xlabel("True Energy [GeV]", fontsize=30)
+    ax[1].set_ylabel(r"$\sigma (E)$ / E", fontsize=30)
+    ax[1].set_ylim((0, ax[1].get_ylim()[1]))
+
+    fig.tight_layout()
+    return fig, ax
+

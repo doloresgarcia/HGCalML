@@ -23,13 +23,13 @@ from Layers import RaggedGravNet
 from Layers import PlotCoordinates
 from Layers import DistanceWeightedMessagePassing
 from Layers import LLFillSpace
-from Layers import LLExtendedObjectCondensation
+from Layers import LLExtendedObjectCondensation2
 from Layers import DictModel
 from Layers import RaggedGlobalExchange
 from Layers import SphereActivation
 from Layers import Multi
 from Layers import ShiftDistance
-from Layers import LLRegulariseGravNetSpace
+from Layers import LLRegulariseGravNetSpace, LLSpectatorPenalty
 from Regularizers import AverageDistanceRegularizer
 from model_blocks import tiny_pc_pool, condition_input
 from model_blocks import extent_coords_if_needed
@@ -254,17 +254,25 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
 
     pred_beta, pred_ccoords, pred_dist, \
         pred_energy_corr, pred_energy_low_quantile, pred_energy_high_quantile, \
-        pred_pos, pred_time, pred_time_unc, pred_id = \
-        create_outputs(x, n_ccoords=N_CLUSTER_SPACE_COORDINATES, fix_distance_scale=True)
+        pred_pos, pred_time, pred_time_unc, pred_id, pred_spectator_weights = \
+        create_outputs(x,
+                n_ccoords=N_CLUSTER_SPACE_COORDINATES,
+                fix_distance_scale=True,
+                predict_spectator_weights=True)
 
     # pred_ccoords = LLFillSpace(maxhits=2000, runevery=5, scale=0.01)([pred_ccoords, rs, t_idx])
+    pred_spectator_weights = LLSpectatorPenalty(record_metrics=True)([
+        pred_spectator_weights,
+        pre_processed['t_idx'],
+        pre_processed['row_splits'],
+        ])
 
     if config['General']['oc_implementation'] == 'hinge':
         loss_implementation = 'hinge'
     else:
         loss_implementation = ''
 
-    pred_beta = LLExtendedObjectCondensation(scale=1.,
+    pred_beta = LLExtendedObjectCondensation2(scale=1.,
                                              use_energy_weights=True,
                                              record_metrics=True,
                                              print_loss=True,
@@ -274,7 +282,7 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
         [pred_beta, pred_ccoords, pred_dist, pred_energy_corr, pred_energy_low_quantile,
          pred_energy_high_quantile, pred_pos, pred_time, pred_time_unc, pred_id, energy,
          pre_processed['t_idx'] , pre_processed['t_energy'] , pre_processed['t_pos'] ,
-         pre_processed['t_time'] , pre_processed['t_pid'] , pre_processed['t_spectator_weight'],
+         pre_processed['t_time'] , pre_processed['t_pid'] , pred_spectator_weights,
          pre_processed['t_fully_contained'], pre_processed['t_rec_energy'],
          pre_processed['t_is_unique'], pre_processed['row_splits']])
 

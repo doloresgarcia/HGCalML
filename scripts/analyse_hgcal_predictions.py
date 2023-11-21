@@ -12,7 +12,7 @@ import mgzip
 import pandas as pd
 import numpy as np
 
-from OCHits2Showers import OCHits2ShowersLayer
+from OCHits2Showers import OCHits2ShowersLayer, OCHits2ShowersLayer_HDBSCAN
 from OCHits2Showers import process_endcap2, OCGatherEnergyCorrFac2
 from ShowersMatcher2 import ShowersMatcher
 from hplots.hgcal_analysis_plotter import HGCalAnalysisPlotter
@@ -92,10 +92,9 @@ def analyse(
         with mgzip.open(file, "rb") as analysis_file:
             file_data = pickle.load(analysis_file)
         for j, endcap_data in enumerate(file_data):
-            print(f"Event {j} out of {len(file_data)}")
             if (nevents != -1) and (j > nevents):
                 continue
-            print(f"Analysing endcap {j}/{len(file_data)}")
+            # print(f"Analysing endcap {j+1}/{len(file_data)}")
             features_dict, truth_dict, predictions_dict = endcap_data
             # predictions_dict["no_noise_sel"] = np.arange(
             #     predictions_dict["row_splits"][1]
@@ -148,6 +147,8 @@ def analyse(
                     ].recHitEnergy
                 )
             )
+
+           
 
             processed_pred_dict, pred_shower_alpha_idx = process_endcap2(
                 hits2showers,
@@ -413,6 +414,8 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    if not os.path.exists(args.picturepath):
+        os.mkdir(args.picturepath)
 
     analyse(
         preddir=args.preddir,

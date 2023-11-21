@@ -1,10 +1,10 @@
+import sys
 import time
 
 import numpy as np
 import tensorflow as tf
 
-
-class OCHits2Showers:
+class OCHits2Showers():
     pass
 
 
@@ -382,6 +382,9 @@ def process_endcap2(
     summing over the energies.
     As we don't have the `is_track` variable included in the features or
     predictions we currently identify tracks over their z-position (Z==315)
+
+    If there is no `no_noise_sel` in the predictions dict, it will be assumed
+    that no noise filtering has been done/is necessary.
     """
     is_track = np.abs(features_dict["recHitZ"]) == 315
     pred_sid, _, alpha_idx, _, ncond = hits2showers_layer(
@@ -486,7 +489,7 @@ def process_endcap2(
             processed_pred_dict["pred_energy"] = pred_energy_comb.numpy()
     else:
         print("Unrecognized energy_mode")
-        exit(1)
+        sys.exit(1)
 
     processed_pred_dict["pred_energy_hits"] = pred_energy_hits.numpy()
     processed_pred_dict["pred_energy_tracks"] = pred_energy_tracks.numpy()

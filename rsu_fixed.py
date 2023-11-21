@@ -35,7 +35,7 @@ from model_blocks import tiny_pc_pool, condition_input
 from model_blocks import extent_coords_if_needed
 from model_blocks import create_outputs
 from model_tools import apply_weights_from_path
-from model_blocks import random_sampling_unit, random_sampling_block, random_sampling_block2
+from model_blocks import random_sampling_unit, random_sampling_block
 from noise_filter import noise_filter
 from callbacks import plotClusteringDuringTraining
 from callbacks import plotClusterSummary
@@ -92,11 +92,9 @@ for i in range(len(config['Training'])):
         wandb_config[f"train_{i}+_fluidity_decay"] = 0.1
 
 wandb.init(
-    project="Connecting-The-Dots",
+    project="August_test",
     config=wandb_config,
 )
-wandb.save(sys.argv[0]) # Save python file
-wandb.save(sys.argv[1]) # Save config file
 
 
 ###############################################################################
@@ -108,49 +106,59 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
     """
     Function that defines the model to train
     """
+    orig_input = td.interpretAllModelInputs(Inputs)
+    embedded = False
 
     ###########################################################################
     ### Pre-processing step ###################################################
     ###########################################################################
 
-    orig_input = td.interpretAllModelInputs(Inputs)
     pre_processed = condition_input(orig_input, no_scaling=True, no_prime=False)
-
+    """
+    pre_processed = noise_filter(orig_input,
+                                 trainable=False,
+                                 pass_through=True)
+    """
+    x_in = Concatenate(name='concat_filter')(
+        [pre_processed['coords'],
+         pre_processed['features'],
+         pre_processed['is_track'],
+         ])
     prime_coords = pre_processed['prime_coords']
+    # tf.print(prime_coords.shape)
+
     is_track = pre_processed['is_track']
     rs = pre_processed['row_splits']
     energy = pre_processed['rechit_energy']
     t_idx = pre_processed['t_idx']
-    x = pre_processed['features']
-
-
-    # Embed hits and track features
-    x = ScaledGooeyBatchNorm2(
-            fluidity_decay=0.01,
-            max_viscosity=0.999999,
-            no_gaus=False)([x, is_track])
-
-    x = ScaledGooeyBatchNorm2(
-            fluidity_decay=0.01,
-            max_viscosity=0.999999,
-            invert_condition=True,
-            no_gaus=False)([x, is_track])
 
     c_coords = prime_coords
     c_coords = ScaledGooeyBatchNorm2(
         name='batchnorm_ccoords',
         fluidity_decay=0.01,
-        max_viscosity=0.999999)(c_coords)
+        max_viscosity=0.9999)(c_coords)
+
+    # Embed hits and track features
+    x = ScaledGooeyBatchNorm2(
+            fluidity_decay=0.01,
+            max_viscosity=0.9999)([pre_processed['features'], is_track])
+
+    x = ScaledGooeyBatchNorm2(
+            fluidity_decay=0.01,
+            max_viscosity=0.9999,
+            invert_condition=True)([x, is_track])
+
     c_coords = PlotCoordinates(
         plot_every=plot_debug_every,
         outdir=debug_outdir,
         name='input_c_coords',
         # publish = publishpath
         )([c_coords, energy, t_idx, rs])
-    c_coords = extent_coords_if_needed(prime_coords, x, N_CLUSTER_SPACE_COORDINATES)
+    c_coords = extent_coords_if_needed(prime_coords, x_in, N_CLUSTER_SPACE_COORDINATES)
 
-    x = Concatenate()([x, c_coords, is_track])
-    x = Dense(64, name='dense_pre_loop', activation=DENSE_ACTIVATION)(x) 
+    x_in = Concatenate()([x, c_coords])
+
+    x = Dense(64, name='dense_pre_loop', activation=DENSE_ACTIVATION)(x_in) 
 
     allfeat = []
     print("Available keys: ", pre_processed.keys())
@@ -162,7 +170,6 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
     gravnet_regs = [0.01, 0.01, 0.01]
 
     for i in range(GRAVNET_ITERATIONS):
-
         d_shape = x.shape[1]//2
 
         x = Dense(d_shape,activation=DENSE_ACTIVATION,
@@ -181,7 +188,7 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
             n_propagate=2*d_shape,
             coord_initialiser_noise=None,
             feature_activation='elu',
-            # sumwnorm=True,
+            sumwnorm=True,
             )([x, rs])
 
         gndist = LLRegulariseGravNetSpace(
@@ -189,16 +196,14 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
                 record_metrics=True,
                 name=f'regularise_gravnet_{i}')([gndist, prime_coords, gnnidx])
 
-        x_rand = random_sampling_block(
-                xgn, rs, gncoords, gnnidx, gndist, is_track,
-                reduction=6, layer_norm=True, name=f"RSU_{i}")
+        x_rand = random_sampling_block(xgn, rs, gncoords, gnnidx, gndist, is_track, reduction=6, name=f"RSU_{i}")
         x_rand = ScaledGooeyBatchNorm2(**BATCHNORM_OPTIONS)(x_rand)
 
         gndist = AverageDistanceRegularizer(
             strength=1e-3,
             record_metrics=True
             )(gndist)
-        # gndist = StopGradient()(gndist)
+        gndist = StopGradient()(gndist)
         gncoords = StopGradient()(gncoords)
         gncoords = PlotCoordinates(
             plot_every=plot_debug_every,
@@ -207,9 +212,9 @@ def config_model(Inputs, td, debug_outdir=None, plot_debug_every=2000):
             )([gncoords, energy, t_idx, rs])
 
         # x = Concatenate()([x_pre, xgn, 0.1 * x_rand, gndist, gncoords])
-        # x_rand = ScalarMultiply(0.1)(x_rand)
-        # gndist = ScalarMultiply(0.01)(gndist)
-        # gncoords = ScalarMultiply(0.01)(gncoords)
+        x_rand = ScalarMultiply(0.1)(x_rand)
+        gndist = ScalarMultiply(0.01)(gndist)
+        gncoords = ScalarMultiply(0.01)(gncoords)
         x = Concatenate()([x_pre, xgn, x_rand, gndist, gncoords])
         x = Dense(d_shape,
                   name=f"dense_post_gravnet_1_iteration_{i}",

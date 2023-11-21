@@ -1,3 +1,5 @@
+import os
+import time
 import pdb
 import gzip
 import pickle
@@ -5,11 +7,10 @@ import numpy as np
 
 from DeepJetCore.DataCollection import DataCollection
 from DeepJetCore.dataPipeline import TrainDataGenerator
+from DeepJetCore.modeltools import load_model
+
 from datastructures.TrainData_NanoML import TrainData_NanoML
 from datastructures.TrainData_PreselectionNanoML import TrainData_PreselectionNanoML
-
-import os
-from DeepJetCore.modeltools import load_model
 from datastructures import TrainData_TrackML
 import time
 
@@ -90,6 +91,11 @@ class HGCalPredictor:
         if model is None:
             model = load_model(model_path)
 
+        for l in model.layers:
+            if isinstance(l, LossLayerBase):
+                print('deactivating layer',l)
+                l.active=False
+
         all_data = []
         for inputfile in self.input_data_files:
 
@@ -143,7 +149,10 @@ class HGCalPredictor:
             extra_data = []  # Only used for toy data test sets
 
             thistime = time.time()
-            for _ in range(1):  # num_steps
+            for step in range(num_steps):
+                if max_steps > 0 and step > max_steps:
+                    break
+
                 data_in = next(generator)
                 if self.toydata:
                     # The toy data set has a different input shape
