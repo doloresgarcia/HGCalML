@@ -3612,7 +3612,7 @@ class RaggedGravNet(tf.keras.layers.Layer):
         # print("weights input_spatial_transform", self.input_spatial_transform.weights)
         # print("bias input_spatial_transform", self.input_spatial_transform.bias)
         # print("coordinates INPUTS TO FIRST LAYER")
-        print(coordinates)
+        # print(coordinates)
         (
             neighbour_indices,
             distancesq,
@@ -4539,7 +4539,7 @@ class RaggedGravNeteq(tf.keras.layers.Layer):
             )
         with tf.name_scope(self.name + "/4/"):
             self.coord_mlp2 = tf.keras.layers.Dense(
-                1, kernel_initializer="glorot_uniform"
+                1, kernel_initializer=xavier_initializer
             )
 
         with tf.name_scope(self.name + "/5/"):
@@ -4651,7 +4651,7 @@ class RaggedGravNeteq(tf.keras.layers.Layer):
         trans = coord_diff * cord_mlp2
         trans = tf.reduce_mean(trans, axis=1)
         # print("trans", trans)
-        print("coordinates", coordinates)
+        # print("coordinates", coordinates)
         coods_new = coordinates + trans
 
         (
@@ -4859,17 +4859,24 @@ class RaggedGravNeteqJan(tf.keras.layers.Layer):
         coordinates = inputs[1]
 
         row_splits = inputs[2]
-        x_all = tf.concat((coordinates, h_orig), axis=1)
+
         (
             neighbour_indices,
             distancesq,
             sidx,
             sdist,
             coord_diff,
-        ) = self.compute_neighbours_and_distancesq(x_all, row_splits, training)
+        ) = self.compute_neighbours_and_distancesq(coordinates, row_splits, training)
+
+        x_all = tf.concat((coordinates, h_orig), axis=1)
+
+        ncoords = SelectWithDefault(sidx, x_all, 0.0)
+        ncoords = tf.reshape(ncoords, [-1, self.n_neighbours + 1, x_all.shape[1]])
+        coord_diff = ncoords[:, 1:, :] - x_all[:, tf.newaxis, :]
+        distancesq = StopGradient()(distancesq)
         gaus_dist = tf.exp(-10 * distancesq)
         gaus_dist = tf.reshape(gaus_dist, [-1, self.n_neighbours, 1])
-        gaus_dist = tf.tile(gaus_dist, [1, 1, x_all.shape[1]])
+        # gaus_dist = tf.tile(gaus_dist, [1, 1, x_all.shape[1]])
         trans = coord_diff * gaus_dist
         trans = tf.reduce_mean(trans, axis=1)
         # trans = activation(trans)
@@ -4941,3 +4948,10 @@ class RaggedGravNeteqJan(tf.keras.layers.Layer):
         }
         base_config = super(RaggedGravNeteqJan, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+
+def xavier_initializer(shape, dtype=tf.dtypes.float32, seed=None, name=None):
+    fan_in = shape[0]
+    fan_out = shape[1]
+    stddev = 0.001 * tf.sqrt(2.0 / (fan_in + fan_out))
+    return tf.random.truncated_normal(shape, stddev=stddev)

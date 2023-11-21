@@ -295,9 +295,18 @@ from GravNetLayersRagged import RaggedGravNet
 
 global_layers_list["RaggedGravNet"] = RaggedGravNet
 
+from random_sampling import RandomSampling
+
+global_layers_list["RandomSampling"] = RandomSampling
+
+
 from GravNetLayersRagged import RaggedGravNeteq
 
 global_layers_list["RaggedGravNeteq"] = RaggedGravNeteq
+
+from GravNetLayersRagged import RaggedGravNeteqJan
+
+global_layers_list["RaggedGravNeteqJan"] = RaggedGravNeteqJan
 
 from EGCN import RaggedEGCN
 
