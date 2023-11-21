@@ -2,6 +2,9 @@
 
 """
 Script that calls the HGCalPredictor class to run inference on a data collection.
+Example use:
+python3 scripts/predict_hgcal.py /eos/user/m/mgarciam/datasets_mlpf/models_trained/logs_10_15_allp_karolina/KERAS_check_best_model.h5  /eos/user/m/mgarciam/datasets_mlpf/230923_20_25/hgcal/dataCollection.djcdc ..
+/eos/user/m/mgarciam/datasets_mlpf/models_trained/logs_10_15_allp_karolina/training_evaluation/ --max_files 1
 """
 
 from argparse import ArgumentParser
