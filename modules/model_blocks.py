@@ -63,6 +63,7 @@ def create_outputs(
     pred_beta = Dense(
         1, activation="sigmoid", name=name_prefix + "_beta", trainable=trainable
     )(x)
+    print("pred_beta", pred_beta)
     pred_ccoords = Dense(
         n_ccoords,
         use_bias=False,
@@ -71,7 +72,6 @@ def create_outputs(
     )(
         x
     )  # bias has no effect
-
     energy_act = None
     if energy_factor:
         energy_act = "elu"
