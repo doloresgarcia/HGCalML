@@ -13,7 +13,6 @@ import pdb
 NORMALIZE_MINMAX = False
 
 
-
 def to_numpy(lst):
     return [np.array(x) for x in lst]
 
@@ -22,7 +21,7 @@ n_id_classes = 22
 
 
 def calc_eta(x, y, z):
-    rsq = np.sqrt(x ** 2 + y ** 2)
+    rsq = np.sqrt(x**2 + y**2)
     return -1 * np.sign(z) * np.log(rsq / np.abs(z + 1e-3) / 2.0 + 1e-3)
 
 
@@ -81,6 +80,7 @@ particle_ids = [int(x) for x in particle_ids]
 #     assert len(energy_from_showers) > 0
 #     return (energy_from_showers.flatten() / y_energy).tolist()
 
+
 def find_cluster_id(hit_particle_link):
     unique_list_particles = list(np.unique(hit_particle_link))
     if np.sum(np.array(unique_list_particles) == -1) > 0:
@@ -105,6 +105,7 @@ def find_mask_no_energy(hit_particle_link, hit_type_a):
         hit_types = np.unique(hit_type_a[mask])
         if np.array_equal(hit_types, [0, 1]):
             list_remove.append(p)
+
     if len(list_remove) > 0:
         # mask = torch.tensor(np.full((len(hit_particle_link)), False, dtype=bool))
         mask = np.full((len(hit_particle_link)), False, dtype=bool)
@@ -125,6 +126,7 @@ def find_mask_no_energy(hit_particle_link, hit_type_a):
         mask_particles = np.full((len(list_p)), False, dtype=bool)
 
     return mask, mask_particles
+
 
 def find_mask_no_energy1(hit_particle_link, hit_type_a, hit_energies, y):
     """This function remove particles with tracks only and remove particles with low fractions
@@ -180,13 +182,13 @@ def find_mask_no_energy1(hit_particle_link, hit_type_a, hit_energies, y):
 
 # @jit(nopython=False)
 def truth_loop(
-        link_list: list,
-        t_dict: dict,
-        part_p_list: list,
-        part_pid_list: list,
-        part_theta_list: list,
-        part_phi_list: list,
-        hit_type_list: list,
+    link_list: list,
+    t_dict: dict,
+    part_p_list: list,
+    part_pid_list: list,
+    part_theta_list: list,
+    part_phi_list: list,
+    hit_type_list: list,
 ):
     nevts = len(link_list)
     masks = []
@@ -439,7 +441,7 @@ class TrainData_fcc(TrainData):
         return out
 
     def convertFromSourceFile(
-            self, filename, weighterobjects, istraining, treename="events"
+        self, filename, weighterobjects, istraining, treename="events"
     ):
 
         fileTimeOut(filename, 10)  # wait 10 seconds for file in case there are hiccups
@@ -649,7 +651,7 @@ class TrainData_fcc(TrainData):
         )
 
     def convertFromSourceFileOld(
-            self, filename, weighterobjects, istraining, treename="events"
+        self, filename, weighterobjects, istraining, treename="events"
     ):
 
         fileTimeOut(filename, 10)  # wait 10 seconds for file in case there are hiccups
@@ -797,4 +799,3 @@ def normalize_min_max(hit_x, is_z=False):
     # 3330 is the outer radius of the HcalBarrel
     new_hitx = hit_x / 3330
     return new_hitx
-

@@ -10,6 +10,7 @@ not compatible with datasets before end of Jan 2022
 
 """
 import os
+import numpy as np
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
 BATCHNORM_OPTIONS = {
@@ -137,7 +138,7 @@ def gravnet_model(
     ############################################################################
     ##################### Input processing, no need to change much here ########
     ############################################################################
-
+    print("Inputs")
     pre_selection = td.interpretAllModelInputs(Inputs, returndict=True)
     # tf.print("INPUTS SHAPE", {key: Inputs[key].shape for key in Inputs})
     # tf.print("PRE-SELECTION SHAPE", {key: Inputs[key].shape for key in pre_selection})
@@ -153,20 +154,23 @@ def gravnet_model(
     rs = pre_selection["row_splits"]
     is_track = pre_selection["is_track"]
 
+    # TODO 1.ScaledGooeyBatchNorm2
     x = ScaledGooeyBatchNorm2(fluidity_decay=0.01)(
         [pre_selection["features"], is_track]
     )
-
+    #! NI 2.ScaledGooeyBatchNorm2 + tracks (not needed)
     x = ScaledGooeyBatchNorm2(fluidity_decay=0.01, invert_condition=True)([x, is_track])
-
+    #! NI 3.ScaledGooeyBatchNorm2 + prime coords
     x_in = Concatenate()([x, pre_selection["prime_coords"]])
-
+    #! 4.ScaledGooeyBatchNorm2 + prime coords
     x_in = Concatenate()([x_in, is_track, SphereActivation()(x_in)])
     x_in = ScaledGooeyBatchNorm2(**BATCHNORM_OPTIONS)(x_in)
+    # TODO 1.Dense
     x_in = Dense(64, activation=DENSE_ACTIVATION)(x_in)
     x = x_in
     energy = pre_selection["rechit_energy"]
     c_coords = pre_selection["prime_coords"]  # pre-clustered coordinates
+    #! NI 2.ScaledGooeyBatchNorm2 + tracks (not needed)
     c_coords = ScaledGooeyBatchNorm2(
         fluidity_decay=0.5,  # can freeze almost immediately
     )(c_coords)
@@ -369,7 +373,7 @@ def gravnet_model(
         "row_splits": pre_selection[
             "row_splits"
         ],  # are these the selected ones or not?
-        #'no_noise_sel': trans['sel_idx_up'],
+        # "no_noise_sel": np.arange(len(pred_beta)),
         #'no_noise_rs': trans['rs_down'], #unclear what that actually means?
         # 'noise_backscatter': pre_selection['noise_backscatter'],
     }
